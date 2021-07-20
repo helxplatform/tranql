@@ -1,7 +1,7 @@
 import pytest
 from tests.util import ordered
-from src.tranql.backplane.server import app
-from src.tranql.backplane.server import RtxQuery, ICEESClusterQuery
+from tranql.backplane.server import app
+from tranql.backplane.server import RtxQuery, ICEESClusterQuery
 import requests_mock
 
 @pytest.fixture

@@ -2,16 +2,16 @@ import os
 import requests
 import yaml
 from functools import reduce
-from src.tranql.main import TranQL
-from src.tranql.tranql_ast import SetStatement, SelectStatement, custom_functions
+from tranql.main import TranQL
+from tranql.tranql_ast import SetStatement, SelectStatement, custom_functions
 from tests.util import assert_lists_equal, set_mock, ordered
 from tests.mocks import MockHelper
 from tests.mocks import MockMap
-from src.tranql.tranql_schema import SchemaFactory
+from tranql.tranql_schema import SchemaFactory
 import requests_mock
 from unittest.mock import patch
 import copy, time
-from src.tranql.utils.merge_utils import connect_knowledge_maps, find_all_paths
+from tranql.utils.merge_utils import connect_knowledge_maps, find_all_paths
 
 #set_verbose ()
 
@@ -1409,7 +1409,7 @@ def test_registry_enabled(requests_mock):
 
 
 def test_registry_adapter_automat():
-    from src.tranql.tranql_schema import RegistryAdapter
+    from tranql.tranql_schema import RegistryAdapter
 
     # let pretend automat url is automat and we will mask what we expect to be called
     # since there is no real logic here we just have to make sure apis are called

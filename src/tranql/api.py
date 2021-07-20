@@ -19,11 +19,11 @@ from tranql.tranql_ast import SelectStatement
 from tranql.tranql_schema import GraphTranslator
 from tranql.exception import TranQLException
 
-logger = logging.getLogger (__name__)
+logger = logging.getLogger(__name__)
 
-web_app_root = os.path.join (os.path.dirname (__file__), "../..", "web", "build")
+web_app_root = os.path.join(os.path.dirname(__file__), "../..", "web", "build")
 WEB_PREFIX = os.environ.get('WEB_PATH_PREFIX', '')
-WEB_PREFIX = f"/{ WEB_PREFIX.strip('/') }" if WEB_PREFIX else ''
+WEB_PREFIX = f"/{WEB_PREFIX.strip('/')}" if WEB_PREFIX else ''
 
 app = Flask(__name__, template_folder=web_app_root)
 
@@ -32,7 +32,7 @@ CORS(app)
 
 app.config['SWAGGER'] = {
     'title': 'TranQL API',
-    'description': 'Translator Query Language (TranQL) API.' 
+    'description': 'Translator Query Language (TranQL) API.'
                    '<div><a href="https://github.com/NCATS-Tangerine/tranql">'
                    'TranQL Source Code and Documentation.'
                    '</a></div>'
@@ -44,19 +44,19 @@ app.config['SWAGGER'] = {
     'openapi': '3.0.1'
 }
 filename = 'translator_interchange.yaml'
-filename = os.path.join (os.path.dirname(__file__), 'backplane', filename)
+filename = os.path.join(os.path.dirname(__file__), 'backplane', filename)
 
 definitions_filename = 'definitions.yaml'
-definitions_filename = os.path.join (os.path.dirname(__file__), definitions_filename)
+definitions_filename = os.path.join(os.path.dirname(__file__), definitions_filename)
 with open(filename, 'r') as file_obj:
     template = {
-        "definitions" : yaml.load(file_obj)["definitions"],
+        "definitions": yaml.load(file_obj)["definitions"],
         "tags": [
-            {"name" : "query"},
-            {"name" : "schema"},
-            {"name" : "util"},
-            {"name" : "configuration"},
-            {"name" : "webapp"}
+            {"name": "query"},
+            {"name": "schema"},
+            {"name": "util"},
+            {"name": "configuration"},
+            {"name": "webapp"}
         ]
     }
     with open(definitions_filename, 'r') as definitions_file:
@@ -82,9 +82,10 @@ swagger = Swagger(app, template=template, config={
     'swagger_ui_js': 'https://rawcdn.githack.com/swagger-api/swagger-ui/v3.23.1/dist/swagger-ui.js'
 })
 
+
 class StandardAPIResource(Resource):
     @staticmethod
-    def validate (request):
+    def validate(request):
         with open(filename, 'r') as file_obj:
             specs = yaml.load(file_obj)
         to_validate = specs["components"]["schemas"]["Message"]
@@ -93,33 +94,33 @@ class StandardAPIResource(Resource):
         try:
             jsonschema.validate(request.json, to_validate)
         except jsonschema.exceptions.ValidationError as error:
-            logging.error (f"ERROR: {str(error)}")
+            logging.error(f"ERROR: {str(error)}")
             abort(Response(str(error), 400))
+
     @staticmethod
-    def handle_exception (e, warning=False):
+    def handle_exception(e, warning=False):
         result = {"errors": []}
-        if isinstance (e, list):
+        if isinstance(e, list):
             [result["errors"].extend(StandardAPIResource.handle_exception(exception)["errors"]) for exception in e]
-        elif isinstance (e, TranQLException):
+        elif isinstance(e, TranQLException):
             result["errors"].append({
-                "message" : str(e),
-                "details" : str(e.details) if e.details else ''
+                "message": str(e),
+                "details": str(e.details) if e.details else ''
             })
-        elif isinstance (e, Exception):
+        elif isinstance(e, Exception):
             result["errors"].append({
-                "message" : str(e),
-                "details" : ''
+                "message": str(e),
+                "details": ''
             })
-        elif isinstance (e, str):
+        elif isinstance(e, str):
             result["errors"].extend(StandardAPIResource.handle_exception(Exception(e))["errors"])
 
-        traceback.print_exc ()
+        traceback.print_exc()
 
         if warning:
             result["status"] = "Warning"
         else:
             result["status"] = "Error"
-
 
         return result
 
@@ -127,10 +128,12 @@ class StandardAPIResource(Resource):
     def response(data):
         status_code = 200
         if isinstance(data, dict):
-            status = data.get('status',None)
+            status = data.get('status', None)
             if status == "Error":
                 status_code = 500
         return (data, status_code)
+
+
 class WebAppRoot(Resource):
     def get(self):
         """
@@ -140,7 +143,9 @@ class WebAppRoot(Resource):
         consumes': [ 'text/plain' ]
         """
         return send_from_directory(web_app_root, 'index.html')
-#api.add_resource(WebAppRoot, '/', endpoint='webapp_root')
+
+
+# api.add_resource(WebAppRoot, '/', endpoint='webapp_root')
 
 class WebAppPath(Resource):
     def get(self, path, web_prefix):
@@ -156,23 +161,26 @@ class WebAppPath(Resource):
               required: true
               description: Resource path.
         """
-        logger.error (f"........................PATH: {path}")
+        logger.error(f"........................PATH: {path}")
         if path.endswith('index.html'):
-            return make_response(render_template(path, web_prefix=web_prefix),200)
+            return make_response(render_template(path, web_prefix=web_prefix), 200)
         if path != "" and os.path.exists(web_app_root + "/" + path):
-            return send_from_directory (web_app_root, filename=path)
+            return send_from_directory(web_app_root, filename=path)
         else:
-            abort (404)
+            abort(404)
 
-#api.add_resource(WebAppPath, '/<path:path>', endpoint='webapp_path')
-#api.add_resource(WebAppPath, '/', endpoint='webapp_root', defaults={'path': 'index.html'})
+
+# api.add_resource(WebAppPath, '/<path:path>', endpoint='webapp_path')
+# api.add_resource(WebAppPath, '/', endpoint='webapp_root', defaults={'path': 'index.html'})
 
 @app.errorhandler(404)
 def page_not_found(e):
     return request.path, 404
 
+
 class Configuration(StandardAPIResource):
     """ Configuration """
+
     def get(self):
         """
         TranQL Configuration
@@ -189,11 +197,14 @@ class Configuration(StandardAPIResource):
 
         """
         return self.response({
-            "api_url" : config['API_URL'],
-            "robokop_url" : config['ROBOKOP_URL']
+            "api_url": config['API_URL'],
+            "robokop_url": config['ROBOKOP_URL']
         })
+
+
 class DecorateKG(StandardAPIResource):
     """ Exposes an endpoint that allows for the decoration of a KGS 0.1.0 knowledge graph with TranQL's decorate method. """
+
     def __init__(self):
         super().__init__()
 
@@ -248,8 +259,8 @@ class DecorateKG(StandardAPIResource):
                         schema:
                           $ref: '#/definitions/Error'
         """
-        message = { "knowledge_graph" : request.json }
-        reasoners = request.args.getlist('reasoners',None)
+        message = {"knowledge_graph": request.json}
+        reasoners = request.args.getlist('reasoners', None)
 
         options = {}
 
@@ -259,6 +270,8 @@ class DecorateKG(StandardAPIResource):
         SelectStatement.decorate_result(message, options)
 
         return self.response(message["knowledge_graph"])
+
+
 class MergeMessages(StandardAPIResource):
     """ Exposes an endpoint that allows for the merging of an arbitrary amount of messages """
 
@@ -361,17 +374,19 @@ class MergeMessages(StandardAPIResource):
         """
         messages = request.json
         interpreter_options = {
-            "name_based_merging" : request.args.get('name_based_merging','true').upper() == 'TRUE',
-            "resolve_names" : request.args.get('resolve_names','false').upper() == 'TRUE'
+            "name_based_merging": request.args.get('name_based_merging', 'true').upper() == 'TRUE',
+            "resolve_names": request.args.get('resolve_names', 'false').upper() == 'TRUE'
         }
         root_question_graph = json.loads(request.args['question_graph'])
-        root_order = request.args.get('root_order',None)
+        root_order = request.args.get('root_order', None)
         if root_order != None:
             # werkzeug.ImmutableMultiDict.getlist doesn't allow for a default if the key isn't present,
             # so first check if its present, and, if so, get it as a list.
             root_order = request.args.getlist('root_order')
-        tranql = TranQL (options=interpreter_options)
-        return self.response(SelectStatement.merge_results(messages,tranql,root_question_graph,root_order))
+        tranql = TranQL(options=interpreter_options)
+        return self.response(SelectStatement.merge_results(messages, tranql, root_question_graph, root_order))
+
+
 class TranQLQuery(StandardAPIResource):
     """ TranQL Resource. """
 
@@ -426,33 +441,34 @@ class TranQLQuery(StandardAPIResource):
                           $ref: '#/definitions/Error'
 
         """
-        #self.validate (request)
+        # self.validate (request)
         result = {}
 
-        logging.debug (request.data)
+        logging.debug(request.data)
         query = request.data.decode('utf-8')
-        dynamic_id_resolution = request.args.get('dynamic_id_resolution','False').upper() == 'TRUE'
+        dynamic_id_resolution = request.args.get('dynamic_id_resolution', 'False').upper() == 'TRUE'
         asynchronous = request.args.get('asynchronous', 'True').upper() == 'TRUE'
-        logging.debug (f"--> query: {query}")
-        tranql = TranQL (options = {
-            "dynamic_id_resolution" : dynamic_id_resolution,
-            "asynchronous" : asynchronous,
+        logging.debug(f"--> query: {query}")
+        tranql = TranQL(options={
+            "dynamic_id_resolution": dynamic_id_resolution,
+            "asynchronous": asynchronous,
             "registry": app.config.get('registry', False),
             # when testing new schema should be created as per the test case
             "recreate_schema": app.config.get('TESTING', True)
         })
         try:
-            context = tranql.execute (query) #, cache=True)
-            result = context.mem.get ('result', {})
-            logger.debug (f" -- backplane: {context.mem.get('backplane', '')}")
-            if len(context.mem.get ('requestErrors', [])) > 0:
+            context = tranql.execute(query)  # , cache=True)
+            result = context.mem.get('result', {})
+            logger.debug(f" -- backplane: {context.mem.get('backplane', '')}")
+            if len(context.mem.get('requestErrors', [])) > 0:
                 errors = self.handle_exception(context.mem['requestErrors'], warning=True)
                 result.update(errors)
         except Exception as e:
             traceback.print_exc()
-            errors = [e, *tranql.context.mem.get ('requestErrors', [])]
-            result = self.handle_exception (errors)
+            errors = [e, *tranql.context.mem.get('requestErrors', [])]
+            result = self.handle_exception(errors)
         return self.response(result)
+
 
 class AnnotateGraph(StandardAPIResource):
     """ Request the message object to be annotated by the backplane and return the annotated message """
@@ -488,16 +504,16 @@ class AnnotateGraph(StandardAPIResource):
                         schema:
                           $ref: '#/definitions/Error'
         """
-        tranql = TranQL ()
+        tranql = TranQL()
         messageObject = request.json
         url = tranql.context.mem.get('backplane') + '/graph/gnbr/decorate'
 
         logger.info(url)
 
         resp = requests.post(
-            url = url,
-            json = messageObject,
-            headers = {
+            url=url,
+            json=messageObject,
+            headers={
                 'accept': 'text/plain'
             }
         )
@@ -510,6 +526,7 @@ class AnnotateGraph(StandardAPIResource):
                 messageObject[type] = result['result_graph']
 
         return self.response(messageObject)
+
 
 class SchemaGraph(StandardAPIResource):
     """ Graph of schema to display to the client """
@@ -537,7 +554,7 @@ class SchemaGraph(StandardAPIResource):
                         schema:
                           $ref: '#/definitions/Error'
         """
-        tranql = TranQL (options={"registry": app.config.get('registry', False)})
+        tranql = TranQL(options={"registry": app.config.get('registry', False)})
         schema = tranql.schema
         schemaGraph = GraphTranslator(schema.schema_graph)
 
@@ -553,6 +570,7 @@ class SchemaGraph(StandardAPIResource):
             for key in errors:
                 obj[key] = errors[key]
         return self.response(obj)
+
 
 class ModelConceptsQuery(StandardAPIResource):
     """ Query model concepts. """
@@ -579,12 +597,12 @@ class ModelConceptsQuery(StandardAPIResource):
         """
         result = {}
         try:
-            concept_model = ConceptModel ("biolink-model")
-            result = sorted (list(concept_model.by_name.keys ()))
-            logging.debug (result)
+            concept_model = ConceptModel("biolink-model")
+            result = sorted(list(concept_model.by_name.keys()))
+            logging.debug(result)
         except Exception as e:
-            #traceback.print_exc (e)
-            result = self.handle_exception (e)
+            # traceback.print_exc (e)
+            result = self.handle_exception(e)
         return self.response(result)
 
 
@@ -613,16 +631,18 @@ class ModelRelationsQuery(StandardAPIResource):
         """
         result = {}
         try:
-            concept_model = ConceptModel ("biolink-model")
-            result = sorted (list(concept_model.relations_by_name.keys ()))
-            logging.debug (result)
+            concept_model = ConceptModel("biolink-model")
+            result = sorted(list(concept_model.relations_by_name.keys()))
+            logging.debug(result)
         except Exception as e:
-            #traceback.print_exc (e)
-            result = self.handle_exception (e)
+            # traceback.print_exc (e)
+            result = self.handle_exception(e)
         return self.response(result)
+
 
 class ReasonerURLs(StandardAPIResource):
     """ Returns the URLs corresponding to `reasoner` properties. """
+
     def __init__(self):
         super().__init__()
 
@@ -640,22 +660,25 @@ class ReasonerURLs(StandardAPIResource):
                         schema:
                           type: object
         """
-        tranql = TranQL ()
+        tranql = TranQL()
         schema = tranql.schema
-        return { schema[0] : schema[1]['url'] for schema in schema.schema.items() }
+        return {schema[0]: schema[1]['url'] for schema in schema.schema.items()}
+
 
 class ParseIncomplete(StandardAPIResource):
     """ Tokenizes an incomplete query and returns the result """
+
     def __init__(self):
         super().__init__()
 
     def parse(self, parser, query):
         if isinstance(query, str):
-            parsed = parser.tokenize (query)
-            result = parsed.asList ()
+            parsed = parser.tokenize(query)
+            result = parsed.asList()
         else:
             result = [self.parse(parser, q) for q in query]
         return result
+
     def post(self):
         """
         Parse Incomplete Query
@@ -725,10 +748,10 @@ class ParseIncomplete(StandardAPIResource):
         else:
             query = request.json
 
-        tranql = TranQL (options= {
+        tranql = TranQL(options={
             'use_registry': app.config.get('registry', False)
         })
-        parser = TranQLIncompleteParser (tranql.context.resolve_arg ("$backplane"))
+        parser = TranQLIncompleteParser(tranql.context.resolve_arg("$backplane"))
 
         result = None
 
@@ -739,6 +762,7 @@ class ParseIncomplete(StandardAPIResource):
             result = self.handle_exception(e)
         return self.response(result)
 
+
 ###############################################################################################
 #
 # Define routes.
@@ -748,15 +772,16 @@ class ParseIncomplete(StandardAPIResource):
 api.add_resource(TranQLQuery, f'{WEB_PREFIX}/tranql/query')
 api.add_resource(SchemaGraph, f'{WEB_PREFIX}/tranql/schema')
 api.add_resource(AnnotateGraph, f'{WEB_PREFIX}/tranql/annotate')
-api.add_resource(MergeMessages,f'{WEB_PREFIX}/tranql/merge_messages')
-api.add_resource(DecorateKG,f'{WEB_PREFIX}/tranql/decorate_kg')
+api.add_resource(MergeMessages, f'{WEB_PREFIX}/tranql/merge_messages')
+api.add_resource(DecorateKG, f'{WEB_PREFIX}/tranql/decorate_kg')
 api.add_resource(ModelConceptsQuery, f'{WEB_PREFIX}/tranql/model/concepts')
 api.add_resource(ModelRelationsQuery, f'{WEB_PREFIX}/tranql/model/relations')
 api.add_resource(ParseIncomplete, f'{WEB_PREFIX}/tranql/parse_incomplete')
 api.add_resource(ReasonerURLs, f'{WEB_PREFIX}/tranql/reasonerURLs')
 
 api.add_resource(WebAppPath, f'{WEB_PREFIX}/<path:path>', endpoint='webapp_path', defaults={'web_prefix': WEB_PREFIX})
-api.add_resource(WebAppPath, f'{WEB_PREFIX}/', endpoint='webapp_root', defaults={'path': f'index.html', 'web_prefix': WEB_PREFIX})
+api.add_resource(WebAppPath, f'{WEB_PREFIX}/', endpoint='webapp_root',
+                 defaults={'path': f'index.html', 'web_prefix': WEB_PREFIX})
 
 if __name__ != '__main__':
     gunicorn_logger = logging.getLogger('gunicorn.error')
@@ -768,7 +793,8 @@ if __name__ == "__main__":
     parser.add_argument('--host', action="store", dest="host", default='0.0.0.0')
     parser.add_argument('--port', action="store", dest="port", default=8001, type=int)
     parser.add_argument('-d', '--debug', help="Debug log level.", default=False, action='store_true')
-    parser.add_argument('-r', '--reloader', help="Use reloader independent of debug.", default=False, action='store_true')
+    parser.add_argument('-r', '--reloader', help="Use reloader independent of debug.", default=False,
+                        action='store_true')
     parser.add_argument('-R', '--registry', help="Use registries to get data", default=False, action='store_true')
     args = parser.parse_args()
     app.config['registry'] = args.registry
