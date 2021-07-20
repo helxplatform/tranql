@@ -10,7 +10,9 @@ pipeline {
         stage('Install') {
             steps {
                 sh '''
-                make install
+                python3 -m pip install --user --upgrade pip
+                python3 -m pip install --user -r requirements.txt
+                python3 -m pip install --user .
                 '''
             }
         }

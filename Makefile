@@ -25,6 +25,7 @@ clean:
 
 #install.python: Install python application along with required development packages
 install.python:
+	${PYTHON} -m pip install  --upgrade pip
 	${PYTHON} -m pip install -r requirements.txt
 	${PYTHON} -m pip install .
 
