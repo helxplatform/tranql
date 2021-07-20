@@ -1,0 +1,16 @@
+version: "3"
+services:
+  backplane:
+    build:
+      dockerfile: Dockerfile
+      context: .
+    ports:
+      - "${BACKPLANE_PORT}:${BACKPLANE_PORT}"
+    command: gunicorn --workers=2 --bind=0.0.0.0:$BACKPLANE_PORT --name=backplane --timeout=600 tranql.backplane.server:app
+  tranql:
+    build:
+      dockerfile: Dockerfile
+      context: .
+    ports:
+      - "${APP_PORT}:${APP_PORT}"
+    command: gunicorn --workers=2 --bind=0.0.0.0:$APP_PORT --name=tranql --timeout=600 tranql.api:app
