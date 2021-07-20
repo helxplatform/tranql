@@ -38,7 +38,6 @@ install: install.python install.npm
 
 #test.python: Run all python tests
 test.python:
-	# ${PYTHON} -m flake8 src
 	${PYTHON} -m pytest --doctest-modules src
 	${PYTHON} -m pytest tests
 
