@@ -141,4 +141,8 @@ cython_debug/
 .idea/
 
 # NPM
-web/node_modules/
+**/web/node_modules
+**/web/build
+
+# Filesystem
+.DS_Store

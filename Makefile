@@ -2,7 +2,7 @@ PYTHON       = /usr/bin/env python3
 VERSION_FILE = ./src/tranql/_version.py
 VERSION      = $(shell cut -d " " -f 3 ${VERSION_FILE})
 DOCKER_REPO  = docker.io
-DOCKER_OWNER = helxplatform
+DOCKER_OWNER = cschreep
 DOCKER_APP	 = tranql
 DOCKER_TAG   = ${VERSION}
 DOCKER_IMAGE = ${DOCKER_OWNER}/${DOCKER_APP}:$(DOCKER_TAG)
@@ -25,13 +25,13 @@ clean:
 
 #install.python: Install python application along with required development packages
 install.python:
-	${PYTHON} -m pip install  --upgrade pip
+	${PYTHON} -m pip install --upgrade pip
 	${PYTHON} -m pip install -r requirements.txt
 	${PYTHON} -m pip install .
 
 #install.npm: Builds the NPM modules
 install.npm:
-	cd web; npm install
+	cd src/tranql/web; npm install; npm run build
 
 #install: Install application
 install: install.python install.npm
@@ -55,6 +55,6 @@ build:
 	echo "Successfully built: ${DOCKER_IMAGE}"
 
 #publish: Build and push docker image
-publish: build
+publish:
 	docker tag ${DOCKER_IMAGE} ${DOCKER_REPO}/${DOCKER_IMAGE}
 	docker push ${DOCKER_REPO}/${DOCKER_IMAGE}

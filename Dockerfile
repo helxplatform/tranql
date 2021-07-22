@@ -11,22 +11,16 @@ USER $USER
 WORKDIR $HOME
 
 ENV PATH=$HOME/.local/bin:$PATH
+ENV PUBLIC_URL={{web_prefix}}
+ENV BACKPLANE=http://tranql-backplane.renci.org
 
 COPY --chown=$USER . tranql/
 
-RUN pip install --user --upgrade pip
-RUN pip install --user -r tranql/requirements.txt
-
-WORKDIR $HOME/tranql
-COPY --chown=$USER . tranql
-RUN pip install --user .
-
-WORKDIR $HOME/tranql/web
+WORKDIR $HOME/tranql/src/tranql/web
 RUN npm install
-ENV PUBLIC_URL={{web_prefix}}
-RUN node --max-old-space-size=4000 ./node_modules/react-scripts/scripts/build.js
-RUN ln -s $HOME/tranql/web/build/static/ $HOME/tranql/src/tranql/static
+RUN npm run build
 
 WORKDIR $HOME/tranql
-
-ENV BACKPLANE=http://tranql-backplane.renci.org
+RUN pip install --user --upgrade pip
+RUN pip install --user -r requirements.txt
+RUN pip install --user --use-feature=in-tree-build .

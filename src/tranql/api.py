@@ -6,26 +6,33 @@ import json
 import logging
 import os
 import traceback
-import yaml
+from pathlib import Path
+
 import jsonschema
 import requests
-from flask import Flask, request, abort, Response, send_from_directory, render_template, make_response
-from flask_restful import Api, Resource
+import yaml
 from flasgger import Swagger
+from flask import Flask, request, abort, Response, send_from_directory, render_template, make_response
 from flask_cors import CORS
+from flask_restful import Api, Resource
+
 from tranql.concept import ConceptModel
+from tranql.exception import TranQLException
 from tranql.main import TranQL, TranQLIncompleteParser
 from tranql.tranql_ast import SelectStatement
 from tranql.tranql_schema import GraphTranslator
-from tranql.exception import TranQLException
 
 logger = logging.getLogger(__name__)
 
-web_app_root = os.path.join(os.path.dirname(__file__), "../..", "web", "build")
+template_folder_path = Path(__file__).parent / "web" / "build"
+template_folder = str(template_folder_path)
+static_folder_path = template_folder_path / "static"
+static_folder = str(static_folder_path)
+
 WEB_PREFIX = os.environ.get('WEB_PATH_PREFIX', '')
 WEB_PREFIX = f"/{WEB_PREFIX.strip('/')}" if WEB_PREFIX else ''
 
-app = Flask(__name__, template_folder=web_app_root)
+app = Flask(__name__, template_folder=template_folder, static_folder=static_folder)
 
 api = Api(app)
 CORS(app)
@@ -142,7 +149,7 @@ class WebAppRoot(Resource):
         tags: [webapp]
         consumes': [ 'text/plain' ]
         """
-        return send_from_directory(web_app_root, 'index.html')
+        return send_from_directory(template_folder, 'index.html')
 
 
 # api.add_resource(WebAppRoot, '/', endpoint='webapp_root')
@@ -161,11 +168,11 @@ class WebAppPath(Resource):
               required: true
               description: Resource path.
         """
-        logger.error(f"........................PATH: {path}")
+        logger.debug(f"........................PATH: {path}")
         if path.endswith('index.html'):
             return make_response(render_template(path, web_prefix=web_prefix), 200)
-        if path != "" and os.path.exists(web_app_root + "/" + path):
-            return send_from_directory(web_app_root, filename=path)
+        if path != "" and os.path.exists(template_folder + "/" + path):
+            return send_from_directory(template_folder, filename=path)
         else:
             abort(404)
 
