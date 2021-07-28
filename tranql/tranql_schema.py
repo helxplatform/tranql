@@ -175,7 +175,7 @@ class RedisAdapter:
 
     def get_schema(self, name):
         gi: GraphInterface = self._get_adatpter(name)
-        schema = gi.get_schema()
+        schema = gi.get_schema(force_update=True)
         return schema
 
 
@@ -193,6 +193,12 @@ class SchemaFactory:
         :param backplane:
         :param use_registry:
         """
+        self.backplane = backplane
+        self.use_registry = use_registry
+        self.udate_interval = update_interval
+        self.tranql_config = tranql_config
+        self.create_new = create_new
+        self.skip_redis=skip_redis
 
         if not SchemaFactory._cached or create_new:
             SchemaFactory._cached = Schema(backplane, use_registry, tranql_config, skip_redis=skip_redis)
@@ -205,14 +211,16 @@ class SchemaFactory:
                 daemon=True)
             SchemaFactory._update_thread.start()
 
-    @staticmethod
-    def get_instance():
+    def get_instance(self, force_update=False):
+        if force_update:
+            SchemaFactory._cached = Schema(self.backplane, self.use_registry, self.tranql_config, self.skip_redis)
         return copy.deepcopy(SchemaFactory._cached)
 
     @staticmethod
     def update_cache_loop(backplane, use_registry, tranql_config,skip_redis, update_interval=20*60):
         while True:
             SchemaFactory._cached = Schema(backplane, use_registry, tranql_config, skip_redis)
+            print('sleeping..... ')
             time.sleep(update_interval)
 
 
@@ -469,72 +477,3 @@ def main ():
     args = arg_parser.parse_args ()
     if args.create_schema:
         print ('yeah')
-
-test_question = {
-  "question_graph": {
-    "edges": [
-      {
-        "id": "e0",
-        "source_id": "n0",
-        "target_id": "n1"
-      },
-      {
-        "id": "e1",
-        "source_id": "n1",
-        "target_id": "n2"
-      },
-      {
-        "id": "e2",
-        "source_id": "n2",
-        "target_id": "n3"
-      },
-      {
-        "id": "e3",
-        "source_id": "n4",
-        "target_id": "n3"
-      }
-    ],
-    "nodes": [
-      {
-        "id": "n0",
-        "type": "chemical_substance",
-        "curie": "PUBCHEM:2083"
-      },
-      {
-        "id": "n1",
-        "type": "gene"
-      },
-      {
-        "id": "n2",
-        "type": "anatomical_entity"
-      },
-      {
-        "id": "n3",
-        "type": "phenotypic_feature"
-      },
-      {
-        "id": "n4",
-        "type": "disease",
-        "curie": "MONDO:0004979"
-      }
-    ]
-  },
-  "knowledge_graph": {
-    "nodes": [],
-    "edges": []
-  },
-  "knowledge_maps": [
-    {}
-  ],
-  "options": {}
-}
-'''
-requests_cache.install_cache('meta_cache')
-m = Schema ()
-m.validate_question (test_question)
-'''
-
-#m.validate_question (get_test_kg ("albuterol_wf5_results.json"))
-#m.validate_question (get_test_kg ("albuterol_wf5_results_gamma.json"))
-# cornerstone
-# slicer

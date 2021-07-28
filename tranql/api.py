@@ -528,9 +528,19 @@ class SchemaGraph(StandardAPIResource):
                     application/json:
                         schema:
                           $ref: '#/definitions/Error'
+        parameters:
+            - in: query
+              name: force_update
+              schema:
+                type: boolean
+              required: false
+              default: false
+              description: Specifies if dynamic id lookup of curies will be performed
         """
+        force_update = request.args.get("force_update")
         tranql = TranQL (options={"registry": app.config.get('registry', False)})
-        schema = tranql.schema
+        schemafactory = tranql.schema_factory
+        schema = schemafactory.get_instance(force_update=force_update)
         schemaGraph = GraphTranslator(schema.schema_graph)
 
         # logger.info(schema.schema_graph.net.nodes)
