@@ -1968,21 +1968,19 @@ def test_redis_graph_query_redis_schema_empty_response():
     }
 
     class graph_Inteface_mock:
-        def __init__(self, limit , skip, options_set):
-            self.limit = limit
-            self.skip  = skip
-            self.options_set = options_set
-
+        def __init__(self):
+            self.get_schema_called =False
+            self.answer_trapi_question_called =False
         def get_schema(self, force_update=False):
-            return {
-                "biolink:Gene": {"biolink:Gene": {"related_to"}}
-            }
+            self.get_schema_called = True
+            return {}
 
         async def answer_trapi_question(self, message, options={}):
+            self.answer_trapi_question_called = True
             return {}
     # we override the schema
-    with patch('PLATER.services.util.graph_adapter.GraphInterface.instance',
-               graph_Inteface_mock(limit=20, skip=100, options_set=True)):
+    gi_mock = graph_Inteface_mock()
+    with patch('PLATER.services.util.graph_adapter.GraphInterface.instance',gi_mock ):
         tranql = TranQL()
         with patch('yaml.safe_load', lambda x: copy.deepcopy(mock_schema_yaml)):
             # clean up schema singleton
@@ -2006,6 +2004,9 @@ def test_redis_graph_query_redis_schema_empty_response():
             select_statement = ast.statements[0]
 
             select_statement.execute(interpreter=tranql)
+            assert gi_mock.get_schema_called
+            # Since empty schema no plan would be made to call this method by the query planner
+            assert not gi_mock.answer_trapi_question_called
 
 
 @patch("PLATER.services.util.graph_adapter.GraphInterface._GraphInterface")
