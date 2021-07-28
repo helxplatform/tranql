@@ -21,6 +21,8 @@ from tranql.exception import IllegalConceptIdentifierError
 from tranql.exception import UnknownServiceError
 from tranql.utils.merge_utils import merge_messages
 from PLATER.services.util.graph_adapter import GraphInterface
+from redis.exceptions import ResponseError as RedisResponseError
+
 
 logger = logging.getLogger (__name__)
 
@@ -664,13 +666,12 @@ class SelectStatement(Statement):
                 }
             )
             question = self.generate_questions(interpreter)
-            from redis.exceptions import ResponseError
             timeout = interpreter.config.get('REDIS_QUERY_TIMEOUT')
             try:
                 response = self.query_redis(redis_connection_params=redis_connection_details,
                                             question=question,
                                             timeout=timeout)
-            except ResponseError as e:
+            except RedisResponseError as e:
                 if str(e).lower() == 'query timed out':
                     error = f"Running Query on redis timed out after {timeout} milliseconds. " \
                             f"Hint: If query consists of multiple nodes try specifying edge types between the nodes. "
