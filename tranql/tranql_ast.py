@@ -624,7 +624,7 @@ class SelectStatement(Statement):
         graph_interface: GraphInterface = GraphInterface(
                 **redis_connection_params
             )
-        options = question.get('options')
+        options = question.get('options', {})
         limit = options.get('limit', [])
         skip = options.get('skip', [])
         max_connections = options.get('max_connectivity', [])
