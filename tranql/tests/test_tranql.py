@@ -1901,7 +1901,7 @@ def test_redis_graph_cypher_options(GraphInterfaceMock):
             self.skip  = skip
             self.options_set = options_set
 
-        async def answer_trapi_question(self, message, options={}):
+        async def answer_trapi_question(self, message, options={}, timeout=0):
             assert message
             if self.options_set:
                 assert options
@@ -1945,3 +1945,145 @@ def test_redis_graph_cypher_options(GraphInterfaceMock):
             )
             select_statement = ast.statements[0]
             select_statement.execute(interpreter=tranql)
+
+
+# @patch("PLATER.services.util.graph_adapter.GraphInterface._GraphInterface")
+def test_redis_graph_query_redis_schema_empty_response():
+    """
+    Test for case where redis returns empty result. when the from clause is "/schema"
+
+    """
+    mock_schema_yaml = {
+        'schema':{
+            'redis': {
+                'doc': 'Red is a color but REDIS?',
+                'url': 'redis:',
+                'redis': True,
+                'redis_connection_params': {
+                    'host': 'local',
+                    'port': 6379
+                }
+            }
+        }
+    }
+
+    class graph_Inteface_mock:
+        def __init__(self):
+            self.get_schema_called =False
+            self.answer_trapi_question_called =False
+        def get_schema(self, force_update=False):
+            self.get_schema_called = True
+            return {}
+
+        async def answer_trapi_question(self, message, options={}):
+            self.answer_trapi_question_called = True
+            return {}
+    # we override the schema
+    gi_mock = graph_Inteface_mock()
+    with patch('PLATER.services.util.graph_adapter.GraphInterface.instance',gi_mock ):
+        tranql = TranQL()
+        with patch('yaml.safe_load', lambda x: copy.deepcopy(mock_schema_yaml)):
+            # clean up schema singleton
+            update_interval = 1
+            backplane = 'http://localhost:8099'
+            schema_factory = SchemaFactory(
+                backplane=backplane,
+                use_registry=False,
+                update_interval=update_interval,
+                create_new=True,
+                tranql_config={}
+            )
+            tranql.schema = schema_factory.get_instance()
+            ast = tranql.parse(
+                """
+                SELECT g1:gene->g2:gene
+                FROM '/schema'
+                where limit = 20 and skip = 100
+                """
+            )
+            select_statement = ast.statements[0]
+
+            select_statement.execute(interpreter=tranql)
+            assert gi_mock.get_schema_called
+            # Since empty schema no plan would be made to call this method by the query planner
+            assert not gi_mock.answer_trapi_question_called
+
+
+@patch("PLATER.services.util.graph_adapter.GraphInterface._GraphInterface")
+def test_query_timeout(GraphInterfaceMock):
+    """
+        Test for making sure that timeout is sent to graph interface answer_trapi method
+
+        """
+
+    mock_schema_yaml = {
+        'schema': {
+            'redis': {
+                'doc': 'Red is a color but REDIS?',
+                'url': 'redis:test',
+                'redis': True,
+                'redis_connection_params': {
+                    'host': 'local',
+                    'port': 6379
+                }
+            }
+        }
+    }
+    is_called = False
+    query_timeout = 2
+    # set
+    os.environ['REDIS_QUERY_TIMEOUT'] = str(query_timeout)
+    os.environ['BACKPLANE'] = 'http://localhost'
+    class graph_Inteface_mock:
+        def __init__(self, limit, skip, options_set):
+            self.limit = limit
+            self.skip = skip
+            self.options_set = options_set
+            self.answer_trapi_question
+            self.is_called = False
+
+        def get_schema(self, *args, **kwargs):
+            return {
+                "biolink:Gene": {"biolink:Gene": ['biolink:related_to']}
+            }
+
+        async def answer_trapi_question(self, message, options={}, timeout=None):
+            ### This is the actual test
+            assert timeout == query_timeout
+            self.is_called = True
+            # emppty result
+            return {}
+
+
+    gi_mock = graph_Inteface_mock(limit=20, skip=100, options_set=True)
+
+    with patch('PLATER.services.util.graph_adapter.GraphInterface.instance', gi_mock):
+        with patch('yaml.safe_load', lambda x: copy.deepcopy(mock_schema_yaml)):
+            # clean up schema singleton and setup tranql
+            update_interval = 1
+            backplane = 'http://localhost:8099'
+            schema_factory = SchemaFactory(
+                backplane=backplane,
+                use_registry=False,
+                update_interval=update_interval,
+                create_new=True,
+                tranql_config={}
+            )
+            tranql = TranQL()
+            tranql.schema = schema_factory.get_instance(force_update=True)
+
+            # Parse query
+
+            ast = tranql.parse(
+                """
+                SELECT g1:gene->g2:gene
+                FROM '/schema'
+                """
+            )
+            select_statement = ast.statements[0]
+
+            # execute query
+            select_statement.execute(interpreter=tranql)
+            # Check if gi_mock.answer is called
+            # note there is also an assert in that method to check if it's called with the right timeout from env
+            assert gi_mock.is_called

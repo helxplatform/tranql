@@ -1,3 +1,4 @@
+import asyncio
 import copy
 import json
 import logging
@@ -12,7 +13,6 @@ from tranql.concept import ConceptModel
 from tranql.concept import BiolinkModelWalker
 from tranql.util import Concept
 from tranql.util import JSONKit
-from tranql.util import light_merge
 from tranql.request_util import async_make_requests
 from tranql.util import Text, snake_case
 from tranql.exception import ServiceInvocationError
@@ -21,6 +21,8 @@ from tranql.exception import IllegalConceptIdentifierError
 from tranql.exception import UnknownServiceError
 from tranql.utils.merge_utils import merge_messages
 from PLATER.services.util.graph_adapter import GraphInterface
+from redis.exceptions import ResponseError as RedisResponseError
+
 
 logger = logging.getLogger (__name__)
 
@@ -609,6 +611,37 @@ class SelectStatement(Statement):
                 break
         return schema
 
+    def query_redis (self, redis_connection_params, question, timeout=None):
+
+        if timeout:
+            try:
+                timeout = int(timeout)
+            except:
+                raise Exception('Configuration error: REDIS_QUERY_TIMEOUT needs to be integer.')
+        else:
+            timeout = 0
+
+        graph_interface: GraphInterface = GraphInterface(
+                **redis_connection_params
+            )
+        options = question.get('options', {})
+        limit = options.get('limit', [])
+        skip = options.get('skip', [])
+        max_connections = options.get('max_connectivity', [])
+        cypher_query_options = {}
+        if limit:
+            cypher_query_options['limit'] = limit[-1]
+        if skip:
+            cypher_query_options['skip'] = skip[-1]
+        if max_connections:
+            cypher_query_options['max_connectivity'] = max_connections[-1]
+        answer = asyncio.run(
+            graph_interface.answer_trapi_question(question['message']['query_graph'],
+                                                  options=cypher_query_options,
+                                                  timeout=timeout))
+        response = {'message': answer}
+        return response
+
     def execute (self, interpreter, context={}):
         """
         Execute all statements in the abstract syntax tree.
@@ -632,24 +665,20 @@ class SelectStatement(Statement):
                     'db_type': 'redis',
                 }
             )
-            graph_interface = GraphInterface(
-                **redis_connection_details
-            )
             question = self.generate_questions(interpreter)
-            import asyncio
-            options = question.get('options')
-            limit = options.get('limit', [])
-            skip = options.get('skip', [])
-            max_connections = options.get('max_connectivity', [])
-            cypher_query_options = {}
-            if limit:
-                cypher_query_options['limit'] = limit[-1]
-            if skip:
-                cypher_query_options['skip'] = skip[-1]
-            if max_connections:
-                cypher_query_options['max_connectivity'] = max_connections[-1]
-            answer = asyncio.run(graph_interface.answer_trapi_question(question['message']['query_graph'], options=cypher_query_options))
-            response = {'message': answer}
+            timeout = interpreter.config.get('REDIS_QUERY_TIMEOUT')
+            try:
+                response = self.query_redis(redis_connection_params=redis_connection_details,
+                                            question=question,
+                                            timeout=timeout)
+            except RedisResponseError as e:
+                if str(e).lower() == 'query timed out':
+                    error = f"Running Query on redis timed out after {timeout} milliseconds. " \
+                            f"Hint: If query consists of multiple nodes try specifying edge types between the nodes. "
+                    interpreter.context.mem.get('requestErrors', []).extend(error)
+                else:
+                    error = f"Redis Error: `{e}`"
+                raise Exception(error)
             # Adds source db as reasoner attr in nodes and edges.
             self.decorate_result(response['message'], {
                 "schema": self.service
@@ -714,8 +743,7 @@ class SelectStatement(Statement):
 
             response['question_order'] = self.query.order
 
-            if len(response) == 0:
-                # @TODO might not be a proper error checking.
+            if not response.get('message'):
                 interpreter.context.mem.get('requestErrors',[]).append(ServiceInvocationError(
                     f"No valid results from {self.service} with query {self.query}"
                 ))
@@ -778,7 +806,13 @@ class SelectStatement(Statement):
                             details = Text.short (obj=f"{json.dumps(response, indent=2)}", limit=1000))
                     duplicate_statements = []
                     first_concept.set_curies(values)
+
+        # merge the responses from backend calls.
         merged = self.merge_results (responses)
+
+        # Although Merge above would merge question graphs , in cases where no results are returned
+        # we'd still want The root question here as the initial question
+        merged['message']['query_graph'] = root_question_graph
         return merged
 
     @staticmethod
@@ -1001,9 +1035,6 @@ class QueryPlanStrategy:
 
         for schema_name, sub_schema_package in self.schema.schema.items ():
             """ Look for a path satisfying this edge in each schema. """
-            # This will restrict usage of TRANQL with redis graph
-            # Explicitly i.e its either /schema or a redis backend
-            # @TODO handle this more elegantly
             sub_schema = sub_schema_package ['schema']
             sub_schema_url = sub_schema_package ['url']
 

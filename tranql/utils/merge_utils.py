@@ -37,7 +37,7 @@ def connect_knowledge_maps(responses):
     # source : target : edge
     transformed_q_graph_edges = {}
     for r in responses:
-        q_graph_edges = r[QUESTION_GRAPH_KEY]['edges']
+        q_graph_edges = r.get(QUESTION_GRAPH_KEY, {"edges": {}})['edges']
         for edge_id, edge_attributes in q_graph_edges.items():
             transformed_q_graph_edges[edge_attributes['subject']] = transformed_q_graph_edges.get(edge_attributes['subject'], {})
             transformed_q_graph_edges[edge_attributes['subject']][edge_attributes['object']] = transformed_q_graph_edges[edge_attributes['subject']]\
@@ -300,7 +300,8 @@ def build_unique_kg_edge_ids(message):
     """
 
     # Make a copy of the edge keys because we're about to change them
-    for edge_id in list(message["knowledge_graph"]["edges"].keys()):
+    edges = message.get('knowledge_graph', {}).get('edges', {})
+    for edge_id in list(edges.keys()):
         edge = message["knowledge_graph"]["edges"].pop(edge_id)
         new_edge_id_string = f"{edge['subject']}-{edge['predicate']}-{edge['object']}"
 
@@ -406,19 +407,36 @@ def calc_score_based_on_publications(merged_kg):
     return merged_kg
 
 
+def merge_query_graph(q_graphs):
+    """
+    Merges query graphs
+    :param q_graphs:
+    :return:
+    """
+    response = {
+        "nodes": {},
+        "edges": {}
+    }
+    for q_graph in q_graphs:
+        response['nodes'].update(q_graph['nodes'])
+        response['edges'].update(q_graph['edges'])
+    return response
+
+
 def merge_messages(messages):
     """Merge messages."""
 
     # Build knowledge graph edge IDs so that we can merge duplicates
     for m in messages:
         build_unique_kg_edge_ids(m)
-
-    kgraphs = [m["knowledge_graph"] for m in messages]
+    # filter out messages that have query graph and knowledge graph
+    qgraphs = [m.get('query_graph') for m in messages if m.get('query_graph')]
+    kgraphs = [m.get("knowledge_graph") for m in messages if m.get('knowledge_graph')]
 
     results_deduplicated = connect_knowledge_maps(messages)
 
     merged =  {
-        "query_graph": messages[0]["query_graph"],
+        "query_graph": merge_query_graph(qgraphs),
         "knowledge_graph": merge_kgraphs(kgraphs),
         "results": results_deduplicated
     }
