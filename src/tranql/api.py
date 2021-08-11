@@ -1,7 +1,6 @@
 """
 Provide a standard protocol for asking graph oriented questions of Translator data sources.
 """
-import argparse
 import json
 import logging
 import os
@@ -18,9 +17,8 @@ from flask_restful import Api, Resource
 
 from tranql.concept import ConceptModel
 from tranql.exception import TranQLException
-from tranql.main import TranQL, TranQLIncompleteParser
+from tranql.main import TranQL
 from tranql.tranql_ast import SelectStatement
-from tranql.tranql_schema import GraphTranslator
 
 logger = logging.getLogger(__name__)
 
@@ -380,6 +378,7 @@ class MergeMessages(StandardAPIResource):
 
         """
         messages = request.json
+<<<<<<< HEAD:src/tranql/api.py
         interpreter_options = {
             "name_based_merging": request.args.get('name_based_merging', 'true').upper() == 'TRUE',
             "resolve_names": request.args.get('resolve_names', 'false').upper() == 'TRUE'
@@ -392,6 +391,9 @@ class MergeMessages(StandardAPIResource):
             root_order = request.args.getlist('root_order')
         tranql = TranQL(options=interpreter_options)
         return self.response(SelectStatement.merge_results(messages, tranql, root_question_graph, root_order))
+=======
+        return self.response(SelectStatement.merge_results(messages))
+>>>>>>> 06ae535c80a669a12fb11841a89a42c40e879b1a:tranql/api.py
 
 
 class TranQLQuery(StandardAPIResource):
@@ -560,9 +562,24 @@ class SchemaGraph(StandardAPIResource):
                     application/json:
                         schema:
                           $ref: '#/definitions/Error'
+        parameters:
+            - in: query
+              name: force_update
+              schema:
+                type: boolean
+              required: false
+              default: false
+              description: Specifies if dynamic id lookup of curies will be performed
         """
+<<<<<<< HEAD:src/tranql/api.py
         tranql = TranQL(options={"registry": app.config.get('registry', False)})
         schema = tranql.schema
+=======
+        force_update = request.args.get("force_update")
+        tranql = TranQL (options={"registry": app.config.get('registry', False)})
+        schemafactory = tranql.schema_factory
+        schema = schemafactory.get_instance(force_update=force_update)
+>>>>>>> 06ae535c80a669a12fb11841a89a42c40e879b1a:tranql/api.py
         schemaGraph = GraphTranslator(schema.schema_graph)
 
         # logger.info(schema.schema_graph.net.nodes)
@@ -755,16 +772,23 @@ class ParseIncomplete(StandardAPIResource):
         else:
             query = request.json
 
+<<<<<<< HEAD:src/tranql/api.py
         tranql = TranQL(options={
             'use_registry': app.config.get('registry', False)
         })
         parser = TranQLIncompleteParser(tranql.context.resolve_arg("$backplane"))
 
+=======
+        # tranql = TranQL (options= {
+        #     'use_registry': app.config.get('registry', False)
+        # })
+        config_path = "conf.yml"
+        config = TranqlConfig(config_path)
+        parser = TranQLIncompleteParser (config.get('BACKPLANE'))
+>>>>>>> 06ae535c80a669a12fb11841a89a42c40e879b1a:tranql/api.py
         result = None
-
         try:
             result = self.parse(parser, query)
-
         except Exception as e:
             result = self.handle_exception(e)
         return self.response(result)
