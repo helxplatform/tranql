@@ -1,0 +1,24 @@
+services:
+  tranql:
+    image: tranql
+    build:
+      context: .
+    environment:
+      REDIS_HOST: redis_graph
+      REDIS_PORT: 6379
+      APP_MODULE: tranql.api:app
+    ports:
+      - 4000:8099
+  redis_graph:
+    image: redis_graph
+    build:
+      context: build/redis_graph
+    environment:
+      THREAD_CNT: 2
+      OMP_THREAD_CNT: 4
+    volumes:
+      - ./redis_data:/data
+networks:
+  default:
+    external:
+      name: tranql

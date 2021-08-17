@@ -203,13 +203,13 @@ class SchemaFactory:
         if not SchemaFactory._cached or create_new:
             SchemaFactory._cached = Schema(backplane, use_registry, tranql_config, skip_redis=skip_redis)
 
-        if not SchemaFactory._update_thread:
-            # avoid creating multiple threads.
-            SchemaFactory._update_thread = threading.Thread(
-                target=SchemaFactory.update_cache_loop,
-                args=(backplane, use_registry , tranql_config, skip_redis, update_interval),
-                daemon=True)
-            SchemaFactory._update_thread.start()
+#       if not SchemaFactory._update_thread:
+#           # avoid creating multiple threads.
+#           SchemaFactory._update_thread = threading.Thread(
+#               target=SchemaFactory.update_cache_loop,
+#               args=(backplane, use_registry , tranql_config, skip_redis, update_interval),
+#               daemon=True)
+#           SchemaFactory._update_thread.start()
 
     def get_instance(self, force_update=False):
         if force_update:
@@ -245,8 +245,15 @@ class Schema:
         """ Resolve remote schemas. """
         for schema_name, metadata in self.config['schema'].copy ().items ():
             if metadata.get('redis', False) and not skip_redis:
+                redis_connection_params = metadata.get('redis_connection_params',None)
+                if redis_connection_params == None:
+                    redis_connection_params = { 'host':'localhost', 'port':6380 }
+                redis_host = os.environ.get('REDIS_HOST',None)
+                redis_port = os.environ.get('REDIS_PORT',None)
+                if redis_host != None: redis_connection_params['host'] = redis_host
+                if redis_port != None: redis_connection_params['port'] = redis_port
                 redis_adapter = RedisAdapter()
-                redis_adapter.set_adapter(schema_name, metadata.get('redis_connection_params'), tranql_config)
+                redis_adapter.set_adapter(schema_name, redis_connection_params, tranql_config)
                 metadata['schema'] = self.snake_case_schema(redis_adapter.get_schema(schema_name))
             if 'registry' in metadata:
                 if use_registry:
