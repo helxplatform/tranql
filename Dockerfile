@@ -23,4 +23,4 @@ RUN npm run build
 WORKDIR $HOME/tranql
 RUN pip install --user --upgrade pip
 RUN pip install --user -r requirements.txt
-RUN pip install --user --use-feature=in-tree-build .
+ENV PYTHONPATH=$HOME/tranql/src/
