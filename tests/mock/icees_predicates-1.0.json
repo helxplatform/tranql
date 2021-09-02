@@ -1,6 +1,6 @@
 {
   "biolink:PopulationOfIndividualOrganisms": {
-    "biolink:ChemicalSubstance": [
+    "biolink:ChemicalEntity": [
       "biolink:association"
     ],
     "biolink:Environmental": [

@@ -6,6 +6,6 @@
 --
 
 set chemical = "CHEMBL:CHEMBL1261" -- Citric acid
-SELECT chemical_substance->disease->gene
+SELECT chemical_entity->disease->gene
 	FROM "/schema"
- WHERE chemical_substance=$chemical
+ WHERE chemical_entity=$chemical

@@ -17,7 +17,7 @@
       "biolink:subclass_of"
     ]
   },
-  "biolink:ChemicalSubstance": {
+  "biolink:ChemicalEntity": {
     "biolink:Disease": [
       "biolink:indicated_for",
       "biolink:contraindicated_for"
@@ -93,7 +93,7 @@
     "biolink:CellularComponent": [
       "biolink:expressed_in"
     ],
-    "biolink:ChemicalSubstance": [
+    "biolink:ChemicalEntity": [
       "biolink:physically_interacts_with"
     ],
     "biolink:Disease": [
