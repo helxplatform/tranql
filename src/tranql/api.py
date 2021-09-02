@@ -606,7 +606,7 @@ class ModelConceptsQuery(StandardAPIResource):
         result = {}
         try:
             concept_model = ConceptModel("biolink-model")
-            result = sorted(list(concept_model.by_name.keys()))
+            result = sorted(list(concept_model.get_all_elements()))
             logging.debug(result)
         except Exception as e:
             # traceback.print_exc (e)
@@ -640,7 +640,7 @@ class ModelRelationsQuery(StandardAPIResource):
         result = {}
         try:
             concept_model = ConceptModel("biolink-model")
-            result = sorted(list(concept_model.relations_by_name.keys()))
+            result = sorted(list(concept_model.get_all_relations()))
             logging.debug(result)
         except Exception as e:
             # traceback.print_exc (e)
@@ -756,9 +756,6 @@ class ParseIncomplete(StandardAPIResource):
         else:
             query = request.json
 
-        # tranql = TranQL (options= {
-        #     'use_registry': app.config.get('registry', False)
-        # })
         config_path = "conf.yml"
         config = TranqlConfig(config_path)
         parser = TranQLIncompleteParser (config.get('BACKPLANE'))

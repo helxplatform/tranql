@@ -198,7 +198,7 @@ class SchemaFactory:
         self.udate_interval = update_interval
         self.tranql_config = tranql_config
         self.create_new = create_new
-        self.skip_redis=skip_redis
+        self.skip_redis = skip_redis
 
         if not SchemaFactory._cached or create_new:
             SchemaFactory._cached = Schema(backplane, use_registry, tranql_config, skip_redis=skip_redis)
@@ -207,7 +207,7 @@ class SchemaFactory:
             # avoid creating multiple threads.
             SchemaFactory._update_thread = threading.Thread(
                 target=SchemaFactory.update_cache_loop,
-                args=(backplane, use_registry , tranql_config, skip_redis, update_interval),
+                args=(backplane, use_registry, tranql_config, skip_redis, update_interval),
                 daemon=True)
             SchemaFactory._update_thread.start()
 
@@ -217,7 +217,7 @@ class SchemaFactory:
         return copy.deepcopy(SchemaFactory._cached)
 
     @staticmethod
-    def update_cache_loop(backplane, use_registry, tranql_config,skip_redis, update_interval=20*60):
+    def update_cache_loop(backplane, use_registry, tranql_config, skip_redis, update_interval=20*60):
         while True:
             SchemaFactory._cached = Schema(backplane, use_registry, tranql_config, skip_redis)
             print('sleeping..... ')
@@ -238,9 +238,9 @@ class Schema:
 
         """ Load the schema, a map of reasoner systems to maps of their schemas. """
         self.config = None
-        config_file = os.path.join (os.path.dirname(__file__), "conf", "schema.yaml")
+        config_file = os.path.join(os.path.dirname(__file__), "conf", "schema.yaml")
         with open(config_file) as stream:
-            self.config = yaml.safe_load (stream)
+            self.config = yaml.safe_load(stream)
 
         """ Resolve remote schemas. """
         for schema_name, metadata in self.config['schema'].copy ().items ():
@@ -267,7 +267,7 @@ class Schema:
                 # If schema_data is a URL
                 try:
                     old_s_d = schema_data
-                    response = requests.get (schema_data)
+                    response = requests.get(schema_data)
                     schema_data = self.snake_case_schema(response.json())
                     if 'message' in schema_data:
                         raise Exception(schema_data['message'])

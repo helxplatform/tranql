@@ -1,6 +1,6 @@
 {
   "biolink:Gene": {
-    "biolink:ChemicalSubstance": [
+    "biolink:ChemicalEntity": [
       "biolink:decreases_degradation_of",
       "biolink:increases_expression_of",
       "biolink:affects_metabolic_processing_of",
@@ -159,7 +159,7 @@
     ]
   },
   "biolink:Disease": {
-    "biolink:ChemicalSubstance": [
+    "biolink:ChemicalEntity": [
       "biolink:prevents",
       "biolink:related_to",
       "biolink:drugcentral",
@@ -265,7 +265,7 @@
     ]
   },
   "biolink:GeneticCondition": {
-    "biolink:ChemicalSubstance": [
+    "biolink:ChemicalEntity": [
       "biolink:prevents",
       "biolink:related_to",
       "biolink:drugcentral",
@@ -368,8 +368,8 @@
       "biolink:disease_to_biological_process_or_activity"
     ]
   },
-  "biolink:ChemicalSubstance": {
-    "biolink:ChemicalSubstance": [
+  "biolink:ChemicalEntity": {
+    "biolink:ChemicalEntity": [
       "biolink:derives_into",
       "biolink:metabolite_to_metabolite"
     ],
@@ -520,7 +520,7 @@
     ]
   },
   "biolink:PhenotypicFeature": {
-    "biolink:ChemicalSubstance": [
+    "biolink:ChemicalEntity": [
       "biolink:contraindicated_for",
       "biolink:prevents",
       "biolink:related_to",
@@ -621,7 +621,7 @@
     ]
   },
   "biolink:BiologicalProcessOrActivity": {
-    "biolink:ChemicalSubstance": [
+    "biolink:ChemicalEntity": [
       "biolink:related_to",
       "biolink:capable_of",
       "biolink:bio_process_chemical_substance",
@@ -725,7 +725,7 @@
     ]
   },
   "biolink:DiseaseOrPhenotypicFeature": {
-    "biolink:ChemicalSubstance": [
+    "biolink:ChemicalEntity": [
       "biolink:prevents",
       "biolink:related_to",
       "biolink:drugcentral",
@@ -1012,7 +1012,7 @@
       "biolink:pathway_to_metabolite",
       "biolink:metabolite_to_pathway"
     ],
-    "biolink:ChemicalSubstance": [
+    "biolink:ChemicalEntity": [
       "biolink:bio_process_chemical_substance",
       "biolink:pathway_to_metabolite",
       "biolink:metabolite_to_pathway"
@@ -1126,7 +1126,7 @@
     "biolink:CellularComponent": [
       "biolink:bio_process_cell_type"
     ],
-    "biolink:ChemicalSubstance": [
+    "biolink:ChemicalEntity": [
       "biolink:bio_process_chemical_substance"
     ],
     "biolink:Gene": [
@@ -1163,7 +1163,7 @@
     "biolink:CellularComponent": [
       "biolink:bio_process_cell_type"
     ],
-    "biolink:ChemicalSubstance": [
+    "biolink:ChemicalEntity": [
       "biolink:bio_process_chemical_substance"
     ],
     "biolink:Gene": [
@@ -1261,7 +1261,7 @@
     "biolink:AnatomicalEntity": [
       "biolink:bio_process_cell_type"
     ],
-    "biolink:ChemicalSubstance": [
+    "biolink:ChemicalEntity": [
       "biolink:bio_process_chemical_substance"
     ],
     "biolink:Gene": [
@@ -1308,7 +1308,7 @@
     "biolink:BiologicalEntity": [
       "biolink:is_a"
     ],
-    "biolink:ChemicalSubstance": [
+    "biolink:ChemicalEntity": [
       "biolink:is_a"
     ],
     "biolink:GenomicEntity": [
@@ -1337,7 +1337,7 @@
     "biolink:Metabolite": [
       "biolink:metabolite_to_metabolite"
     ],
-    "biolink:ChemicalSubstance": [
+    "biolink:ChemicalEntity": [
       "biolink:metabolite_to_metabolite"
     ],
     "biolink:Gene": [
@@ -1382,7 +1382,7 @@
       "biolink:is_a",
       "biolink:metabolite_to_metabolite"
     ],
-    "biolink:ChemicalSubstance": [
+    "biolink:ChemicalEntity": [
       "biolink:is_a",
       "biolink:metabolite_to_metabolite"
     ],

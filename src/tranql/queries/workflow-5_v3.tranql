@@ -11,7 +11,7 @@
 --      associated with exposure to these chemicals?
 --
 
-SELECT population_of_individual_organisms->chemical_substance->gene->biological_process_or_activity<-phenotypic_feature
+SELECT population_of_individual_organisms->chemical_entity->gene->biological_process_or_activity<-phenotypic_feature
   FROM "/schema"
  WHERE icees.table = 'patient'
    AND icees.year = 2010

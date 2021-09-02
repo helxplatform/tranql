@@ -2,8 +2,8 @@
   "message": {
     "query_graph": {
       "nodes": {
-        "chemical_substance": {
-          "category": "biolink:ChemicalSubstance"
+        "chemical_entity": {
+          "category": "biolink:ChemicalEntity"
         },
         "gene": {
           "category": "biolink:Gene"
@@ -11,7 +11,7 @@
       },
       "edges": {
         "e1": {
-          "subject": "chemical_substance",
+          "subject": "chemical_entity",
           "object": "gene"
         }
       }
@@ -19,7 +19,7 @@
     "results": [
       {
         "node_bindings": {
-          "chemical_substance": [
+          "chemical_entity": [
             {
               "id": "CHEBI:28177"
             }
@@ -48,7 +48,7 @@
       "nodes": {
         "CHEBI:28177": {
           "category": [
-            "biolink:ChemicalSubstance"
+            "biolink:ChemicalEntity"
           ]
         },
         "HGNC:2597": {

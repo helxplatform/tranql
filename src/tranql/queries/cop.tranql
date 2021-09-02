@@ -5,8 +5,8 @@
 set drug = 'PUBCHEM:2083'
 set disease = 'MONDO:0004979'
 
-select chemical_substance->gene->anatomical_entity->phenotypic_feature<-disease
+select chemical_entity->gene->anatomical_entity->phenotypic_feature<-disease
   from '/graph/gamma/quick'
- where chemical_substance = $drug
+ where chemical_entity = $drug
    and disease = $disease
 

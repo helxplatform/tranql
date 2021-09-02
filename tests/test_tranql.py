@@ -45,14 +45,14 @@ def test_parse_predicate (GraphInterfaceMock, requests_mock):
     print (f"test_parse_predicate()")
     assert_parse_tree (
         code = """
-        SELECT chemical_substance-[treats]->disease
+        SELECT chemical_entity-[treats]->disease
           FROM "/graph/gamma/quick"
-          WHERE chemical_substance='PUBCHEM:2083'
+          WHERE chemical_entity='PUBCHEM:2083'
             SET "$.knowledge_graph.nodes.[*].id as indications
         """,
         expected = [
             [ [ "select",
-                "chemical_substance",
+                "chemical_entity",
                 [ "-[",
                   "treats",
                   "]->"
@@ -62,7 +62,7 @@ def test_parse_predicate (GraphInterfaceMock, requests_mock):
             [ "from", [ "/graph/gamma/quick"] ],
             ["where",
              [
-                 "chemical_substance",
+                 "chemical_entity",
                  "=",
                  "PUBCHEM:2083"
              ]
@@ -86,7 +86,7 @@ def test_parse_function (GraphInterfaceMock, requests_mock):
 
     # Test concat function
     code = """
-        SELECT chemical_substance->gene->disease
+        SELECT chemical_entity->gene->disease
           FROM "/graph/gamma/quick"
          WHERE disease=concat_strings(get_asthma(), "ma")
     """
@@ -118,7 +118,7 @@ def test_parse_list_function (GraphInterfaceMock, requests_mock):
 
     # Test list function
     code = """
-        SELECT chemical_substance->gene->disease
+        SELECT chemical_entity->gene->disease
           FROM "/graph/gamma/quick"
          WHERE disease=returns_list()
     """
@@ -153,7 +153,7 @@ def test_parse_kwarg_function (GraphInterfaceMock, requests_mock):
 
     # Test list function
     code = """
-        SELECT chemical_substance->gene->disease
+        SELECT chemical_entity->gene->disease
           FROM "/graph/gamma/quick"
          WHERE disease=kwarg_function("beginning of body", "ending of body", prefix="_CUSTOM_PREFIX_")
     """
@@ -180,7 +180,7 @@ def test_parse_list (GraphInterfaceMock, requests_mock):
     """ Test parsing of lists within where statements """
     """ Also make sure that vars are properly recognized """
     code = """
-        SELECT chemical_substance->gene->disease
+        SELECT chemical_entity->gene->disease
           FROM "/graph/gamma/quick"
          WHERE disease = ['asthma', 'smallpox', $my_var]
     """
@@ -248,15 +248,15 @@ def test_parse_select_simple (GraphIntefaceMock, requests_mock):
     print (f"test_parse_select_simple()")
     assert_parse_tree (
         code = """
-        SELECT chemical_substance->gene->biological_process->phenotypic_feature
+        SELECT chemical_entity->gene->biological_process->phenotypic_feature
           FROM "/graph/gamma/quick"
-         WHERE chemical_substance = $chemical_exposures
+         WHERE chemical_entity = $chemical_exposures
            SET knowledge_graph """,
         expected = [
-            [["select", "chemical_substance", "->", "gene", "->", "biological_process", "->", "phenotypic_feature", "\n"],
+            [["select", "chemical_entity", "->", "gene", "->", "biological_process", "->", "phenotypic_feature", "\n"],
              "          ",
              ["from", ["/graph/gamma/quick"]],
-             ["where", ["chemical_substance", "=", "$chemical_exposures"]],
+             ["where", ["chemical_entity", "=", "$chemical_exposures"]],
              ["set", ["knowledge_graph"]]]
         ])
 
@@ -267,7 +267,7 @@ def test_parse_select_complex (GraphInterfaceMock, requests_mock):
     print (f"test_parse_select_complex()")
     assert_parse_tree (
         code = """
-        SELECT disease->chemical_substance
+        SELECT disease->chemical_entity
           FROM "/flow/5/mod_1_4/icees/by_residential_density"
          WHERE disease = "asthma"
            AND EstResidentialDensity < "2"
@@ -275,7 +275,7 @@ def test_parse_select_complex (GraphInterfaceMock, requests_mock):
            AND max_p_value = "0.5"
            SET '$.nodes.[*].id' AS chemical_exposures """,
         expected = [
-            [["select", "disease", "->", "chemical_substance", "\n"],
+            [["select", "disease", "->", "chemical_entity", "\n"],
              "          ",
              ["from", ["/flow/5/mod_1_4/icees/by_residential_density"]],
              ["where",
@@ -400,25 +400,25 @@ def test_ast_generate_questions (requests_mock):
     assert question['query_graph']['nodes']['cohort_diagnosis']['category'] == 'biolink:Disease'
     assert question['query_graph']['nodes']['diagnoses']['category'] == 'biolink:Disease'
 
-
-def test_ast_generate_questions_from_list():
+@patch("PLATER.services.util.graph_adapter.GraphInterface._GraphInterface")
+def test_ast_generate_questions_from_list(GraphInterfaceMock):
     tranql = TranQL()
     tranql.dynamic_id_resolution = True
     curie_list = ['chebi:123', 'CHEBI:234']
     ast = tranql.parse(
         f"""
             SET c = {curie_list}
-            SELECT chemical_substance->gene
+            SELECT chemical_entity->gene
             FROM '/schema'
-            WHERE chemical_substance=$c
+            WHERE chemical_entity=$c
             """
     )
     # first let's run the set statement
     ast.statements[0].execute(tranql)
     questions = ast.statements[1].generate_questions(tranql)['message']
-    chemical_node =  questions['query_graph']['nodes']['chemical_substance']
+    chemical_node =  questions['query_graph']['nodes']['chemical_entity']
     assert chemical_node['id'] == curie_list
-    assert chemical_node['category'] == 'biolink:ChemicalSubstance'
+    assert chemical_node['category'] == 'biolink:ChemicalEntity'
     assert questions['query_graph']['nodes']['gene']['category'] == 'biolink:Gene'
 
     # Multiple variable setting
@@ -428,10 +428,10 @@ def test_ast_generate_questions_from_list():
         f"""
         SET chemicals= {chemicals}
         SET genes = {gene_list}
-        SELECT chemical_substance->gene
+        SELECT chemical_entity->gene
         FROM '/schema'
         WHERE gene=$genes
-        AND chemical_substance=$chemicals
+        AND chemical_entity=$chemicals
         """
     )
     # Here we should get the following  chebi:123 -> BRAC1, chebi:123 -> BRAC2 , water -> BRAC1 and water -> BRAC2
@@ -449,7 +449,7 @@ def test_ast_generate_questions_from_list():
     # get all chemical and genes
 
     nodes = questions['query_graph']['nodes']
-    chemical_node = nodes['chemical_substance']
+    chemical_node = nodes['chemical_entity']
     gene_node = nodes['gene']
     chemicals_ids = chemical_node['id']
     gene_ids = gene_node['id']
@@ -460,7 +460,8 @@ def test_ast_generate_questions_from_list():
     assert_lists_equal(chemicals_ids, chemicals)
     assert_lists_equal(gene_list, gene_ids)
 
-def test_ast_generate_questions_list_variable():
+@patch("PLATER.services.util.graph_adapter.GraphInterface._GraphInterface")
+def test_ast_generate_questions_list_variable(GraphInterfaceMock):
     # make sure that a list is parsed correctly when it contains variables
 
     """ currently this test doesn't pass due to a bug in expand_nodes. the interpreter
@@ -488,9 +489,9 @@ def test_ast_generate_questions_list_variable():
     ast_3 = tranql.parse(f"""
         SET var_str = 'CHEBI:0'
         SET var_list = ['CHEBI:22', 'CHEBI:33']
-        SELECT chemical_substance->gene->disease
+        SELECT chemical_entity->gene->disease
           FROM "/graph/gamma/quick"
-         WHERE chemical_substance = [$var_str, 'CHEBI:1', $var_list]
+         WHERE chemical_entity = [$var_str, 'CHEBI:1', $var_list]
     """)
     set_var_str = ast_3.statements[0]
     set_var_list = ast_3.statements[1]
@@ -499,14 +500,15 @@ def test_ast_generate_questions_list_variable():
     set_var_str.execute (tranql)
     set_var_list.execute (tranql)
     question = select_statement.generate_questions (tranql)['message']
-    chem_ids = question['query_graph']['nodes']['chemical_substance']['id']
+    chem_ids = question['query_graph']['nodes']['chemical_entity']['id']
     assert_lists_equal(sorted(chem_ids), sorted(['CHEBI:0', 'CHEBI:22', 'CHEBI:33', 'CHEBI:1']))
 
-def test_generate_questions_where_clause_list():
+@patch("PLATER.services.util.graph_adapter.GraphInterface._GraphInterface")
+def test_generate_questions_where_clause_list(GraphInterfaceMock):
     # Try to generate questions if values for nodes are set as lists in the where clause
     curies = ['HGNC:3', 'HGNC:34']
     query = f"""
-    SELECT gene->chemical_substance
+    SELECT gene->chemical_entity
     FROM '/schema'
     WHERE gene={curies}
     """
@@ -518,7 +520,8 @@ def test_generate_questions_where_clause_list():
     # we should have two questions
     assert set(gene_curies) == set(curies)
 
-def test_ast_format_constraints (requests_mock):
+@patch("PLATER.services.util.graph_adapter.GraphInterface._GraphInterface")
+def test_ast_format_constraints (GraphIntefaceMock, requests_mock):
     set_mock(requests_mock, "workflow-5")
     """ Validate that
             -- The syntax to pass values to reasoners in the where clause (e.g. "icees.foo = bar") functions properly
@@ -528,7 +531,7 @@ def test_ast_format_constraints (requests_mock):
         'recreate_schema': True
     })
     ast = tranql.parse ("""
-        SELECT population_of_individual_organisms->chemical_substance
+        SELECT population_of_individual_organisms->chemical_entity
           FROM "/clinical/cohort/disease_to_chemical_exposure?provider=icees"
          WHERE icees.should_format = 1
            AND robokop.should_not_format = 0
@@ -542,7 +545,9 @@ def test_ast_format_constraints (requests_mock):
         ['robokop.should_not_format', '=', 0],
         ['robokop.should_not_format', '=', 0]
     ])
-def test_ast_backwards_arrow (requests_mock):
+
+@patch("PLATER.services.util.graph_adapter.GraphInterface._GraphInterface")
+def test_ast_backwards_arrow (GraphInterfaceMock, requests_mock):
     set_mock(requests_mock, "workflow-5")
     print("test_ast_backwards_arrow ()")
     tranql = TranQL (options={
@@ -560,7 +565,9 @@ def test_ast_backwards_arrow (requests_mock):
     assert len(edge_keys) == 1
     assert backwards_question["query_graph"]["edges"][edge_keys[0]]["subject"] == "microRNA"
     assert backwards_question["query_graph"]["edges"][edge_keys[0]]["object"] == "biological_process"
-def test_ast_decorate_element (requests_mock):
+
+@patch("PLATER.services.util.graph_adapter.GraphInterface._GraphInterface")
+def test_ast_decorate_element (GraphInterfaceMock, requests_mock):
     set_mock(requests_mock, "workflow-5")
     """ Validate that
             -- The SelectStatement::decorate method properly decorates both nodes and edges
@@ -570,7 +577,7 @@ def test_ast_decorate_element (requests_mock):
         'recreate_schema': True
     })
     ast = tranql.parse ("""
-        SELECT chemical_substance->disease
+        SELECT chemical_entity->disease
           FROM "/graph/gamma/quick"
     """)
     select = ast.statements[0]
@@ -641,7 +648,9 @@ def test_ast_resolve_name (requests_mock):
         'CHEBI:5855',
         'CHEMBL:CHEMBL521']
     )
-def test_ast_predicate_question (requests_mock):
+
+@patch("PLATER.services.util.graph_adapter.GraphInterface._GraphInterface")
+def test_ast_predicate_question (GraphInterfaceMock, requests_mock):
     set_mock(requests_mock, "workflow-5")
     """ Validate that
             -- A query with a predicate will be properly formatted into a question graph
@@ -649,9 +658,9 @@ def test_ast_predicate_question (requests_mock):
     print("test_ast_predicates ()")
     tranql = TranQL ()
     ast = tranql.parse ("""
-        SELECT chemical_substance-[treats]->disease
+        SELECT chemical_entity-[treats]->disease
           FROM "/graph/gamma/quick"
-         WHERE chemical_substance='CHEMBL:CHEMBL521'
+         WHERE chemical_entity='CHEMBL:CHEMBL521'
     """)
     select = ast.statements[0]
     question = select.generate_questions(tranql)["message"]["query_graph"]
@@ -659,7 +668,9 @@ def test_ast_predicate_question (requests_mock):
     assert len(question["edges"]) == 1
     edge_keys = list(question['edges'].keys())
     assert question["edges"][edge_keys[0]]["predicate"] == "biolink:treats"
-def test_ast_multiple_reasoners (requests_mock):
+
+@patch("PLATER.services.util.graph_adapter.GraphInterface._GraphInterface")
+def test_ast_multiple_reasoners (GraphInterfaceMock, requests_mock):
     set_mock(requests_mock, "workflow-5")
     """ Validate that
             -- A query spanning multiple reasoners will query multiple reasoners.
@@ -670,16 +681,16 @@ def test_ast_multiple_reasoners (requests_mock):
         'recreate_schema': True
     })
     ast = tranql.parse ("""
-        SELECT chemical_substance->disease->gene
+        SELECT chemical_entity->disease->gene
           FROM "/schema"
     """)
     # RTX and Robokop both support transitions between chemical_substance->disease and only Robokop supports transitions between disease->gene
     select = ast.statements[0]
     statements = select.plan (select.planner.plan (select.query))
-    assert_lists_equal(statements[0].query.order,['chemical_substance','disease'])
+    assert_lists_equal(statements[0].query.order,['chemical_entity','disease'])
     assert statements[0].get_schema_name(tranql) == "robokop"
 
-    assert_lists_equal(statements[1].query.order,['chemical_substance','disease'])
+    assert_lists_equal(statements[1].query.order,['chemical_entity','disease'])
     assert statements[1].get_schema_name(tranql) == "rtx"
 
     assert_lists_equal(statements[2].query.order,['disease','gene'])
@@ -919,19 +930,21 @@ def test_ast_plan_strategy (requests_mock):
         assert sub_schema_plan[2][0][2].type_name == "biolink:Disease"
         assert sub_schema_plan[2][0][2].name == "diagnoses"
         assert sub_schema_plan[2][0][2].curies == []
-def test_ast_implicit_conversion (requests_mock):
+
+@patch("PLATER.services.util.graph_adapter.GraphInterface._GraphInterface")
+def xtest_ast_implicit_conversion (GraphIntefaceMock, requests_mock):
     set_mock(requests_mock, "workflow-5")
     tranql = TranQL (options={
         'recreate_schema': True
     })
     ast = tranql.parse ("""
-        SELECT drug_exposure->chemical_substance
+        SELECT drug_exposure->chemical_entity
          FROM '/schema'
     """)
     select = ast.statements[0]
     statements = select.plan (select.planner.plan (select.query))
 
-    assert_lists_equal(statements[0].query.order,["drug_exposure","chemical_substance"])
+    assert_lists_equal(statements[0].query.order,["drug_exposure","chemical_entity"])
     assert statements[0].get_schema_name(tranql) == "implicit_conversion"
 
 def test_ast_plan_statements (requests_mock):
@@ -984,7 +997,8 @@ def test_ast_plan_statements (requests_mock):
         (statements[0].service == "/graph/rtx" and statements[1].service == "/graph/gamma/quick")
     )
 
-def test_ast_bidirectional_query (requests_mock):
+@patch("PLATER.services.util.graph_adapter.GraphInterface._GraphInterface")
+def test_ast_bidirectional_query (GraphInterfaceMock, requests_mock):
     set_mock(requests_mock, "workflow-5")
     """ Validate that we parse and generate queries correctly for bidirectional queries. """
     print ("test_ast_bidirectional_query ()")
@@ -1013,9 +1027,9 @@ def test_ast_bidirectional_query (requests_mock):
         # chemical_substance->gene->anatomical_entity->phenotypic_feature<-disease
         # node_index = { n['id'] : i for i, n in enumerate (nodes) }
         assert nodes['disease']['id'] == [disease_id]
-        assert nodes['chemical_substance']['id'] == [chemical]
-        assert edges['e1_chemical_substance_gene']['subject'] == 'chemical_substance'
-        assert edges['e1_chemical_substance_gene']['object'] == 'gene'
+        assert nodes['chemical_entity']['id'] == [chemical]
+        assert edges['e1_chemical_entity_gene']['subject'] == 'chemical_entity'
+        assert edges['e1_chemical_entity_gene']['object'] == 'gene'
         assert edges['e2_gene_anatomical_entity']['subject'] == 'gene'
         assert edges['e2_gene_anatomical_entity']['object'] == 'anatomical_entity'
         assert edges['e3_anatomical_entity_phenotypic_feature']['subject'] == 'anatomical_entity'
@@ -1050,7 +1064,8 @@ def test_interpreter_set (requests_mock):
     assert output['disease'] == "asthma"
     assert output['cohort'] == "COHORT:22"
 
-def test_program (requests_mock):
+@patch("PLATER.services.util.graph_adapter.GraphInterface._GraphInterface")
+def test_program (GraphInterfaceMock, requests_mock):
     print ("test_program ()")
     mock_map = MockMap (requests_mock, "workflow-5")
     tranql = TranQL (options = {
@@ -1081,16 +1096,16 @@ def test_program (requests_mock):
        AND max_p_value = '0.1'
        SET '$.message.knowledge_graph.nodes.*.id' AS chemical_exposures
 
-    SELECT chemical_substance->gene->biological_process->anatomical_entity
+    SELECT chemical_entity->gene->biological_process->anatomical_entity
       FROM "/graph/gamma/quick"
-     WHERE chemical_substance = $chemical_exposures
+     WHERE chemical_entity = $chemical_exposures
        SET knowledge_graph
     """)
 
 
     kg = tranql.context.resolve_arg("$knowledge_graph")
     assert "CHEBI:28177"  in kg['message']['knowledge_graph']['nodes']
-    assert kg['message']['results'][0]['node_bindings']['chemical_substance'][0] == {"id": "CHEBI:28177"}
+    assert kg['message']['results'][0]['node_bindings']['chemical_entity'][0] == {"id": "CHEBI:28177"}
 
 
 def test_unique_ids_for_repeated_concepts():

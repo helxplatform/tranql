@@ -12,14 +12,14 @@
 --
 
 -- this one's broken because icees.cohort_features.Sex is not a thing.
-SELECT cohort_diagnosis:disease->diagnoses:disease->genes1:gene->biological_process_or_activity->drug2:chemical_substance->genes2:gene->candidate_drug:chemical_substance
+SELECT cohort_diagnosis:disease->diagnoses:disease->genes1:gene->biological_process_or_activity->drug2:chemical_entity->genes2:gene->candidate_drug:chemical_entity
   FROM '/schema'
  WHERE icees.table = 'patient'
    AND icees.year = 2010
    AND icees.cohort_features.Sex = '0'
    AND icees.maximum_p_value = 1
 
-SELECT population_of_individual_organisms->disease->gene->biological_process_or_activity->chemical_substance
+SELECT population_of_individual_organisms->disease->gene->biological_process_or_activity->chemical_entity
   FROM '/schema'
  WHERE icees.table = 'patient'
    AND icees.year = 2010

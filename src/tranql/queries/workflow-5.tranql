@@ -20,9 +20,9 @@ SELECT population_of_individual_organisms->drug_exposure
    AND max_p_value = '0.1'
    SET '$.answers.[*].node_bindings.drug_exposure' AS chemical_exposures
 
-SELECT chemical_substance->gene->biological_process->phenotypic_feature
+SELECT chemical_entity->gene->biological_process->phenotypic_feature
   FROM '/graph/gamma/quick'
- WHERE chemical_substance = $chemical_exposures
+ WHERE chemical_entity = $chemical_exposures
    SET phenotypic_pathways 
 
 CREATE GRAPH $phenotypic_pathways

@@ -292,9 +292,9 @@ def test_query(GraphInterfaceMock, client, requests_mock):
            AND max_p_value = '0.1'
            SET '$.message.knowledge_graph.nodes.*.id' AS chemical_exposures
 
-        SELECT chemical_substance->gene->biological_process->anatomical_entity
+        SELECT chemical_entity->gene->biological_process->anatomical_entity
           FROM "/graph/gamma/quick"
-         WHERE chemical_substance = $chemical_exposures
+         WHERE chemical_entity = $chemical_exposures
            SET knowledge_graph
     """
     args = {
@@ -310,13 +310,13 @@ def test_query(GraphInterfaceMock, client, requests_mock):
     assert 'message'  in response.json
     assert 'errors' not in response.json
     assert "CHEBI:28177" in response.json['message']['knowledge_graph']['nodes']
-    assert response.json['message']['results'][0]['node_bindings']['chemical_substance'][0] == {"id": "CHEBI:28177"}
+    assert response.json['message']['results'][0]['node_bindings']['chemical_entity'][0] == {"id": "CHEBI:28177"}
 
     response = client.post(
         '/tranql/query',
         query_string=args,
         data="""
-            SELECT chemical_substance->foobar
+            SELECT chemical_entity->foobar
               FROM '/schema'
         """,
         content_type='application/json'
