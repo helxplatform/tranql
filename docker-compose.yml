@@ -1,18 +1,15 @@
 version: "3"
 services:
-  backplane:
-    image: cschreep/tranql:0.2.dev0
-#    build:
-#      dockerfile: Dockerfile
-#      context: .
-    ports:
-      - "${BACKPLANE_PORT}:${BACKPLANE_PORT}"
-    command: gunicorn --workers=2 --bind=0.0.0.0:$BACKPLANE_PORT --name=backplane --timeout=600 tranql.backplane.server:app
   tranql:
-    image: cschreep/tranql:0.2.dev0
-#    build:
-#      dockerfile: Dockerfile
-#      context: .
+    build:
+      dockerfile: Dockerfile
+      context: .
     ports:
-      - "${APP_PORT}:${APP_PORT}"
-    command: gunicorn --workers=2 --bind=0.0.0.0:$APP_PORT --name=tranql --timeout=600 tranql.api:app
+      - "8001:8001"
+    command: gunicorn --workers=1 --bind=0.0.0.0:8001 --name=tranql --timeout=600 --reload tranql.api:app
+    volumes:
+      - ./src:/home/tranql/tranql/src
+  redis_graph:
+    image: redislabs/redisgraph
+    volumes:
+      - ./redis_data:/data

@@ -6,6 +6,8 @@ DOCKER_OWNER = helxplatform
 DOCKER_APP	 = tranql
 DOCKER_TAG   = ${VERSION}
 DOCKER_IMAGE = ${DOCKER_OWNER}/${DOCKER_APP}:$(DOCKER_TAG)
+TEST_REDIS_DUMP_FILE = "https://stars.renci.org/var/kgx_data/v3.0/roger-mini.rdb"
+
 
 .DEFAULT_GOAL = help
 
@@ -58,3 +60,15 @@ build:
 publish:
 	docker tag ${DOCKER_IMAGE} ${DOCKER_REPO}/${DOCKER_IMAGE}
 	docker push ${DOCKER_REPO}/${DOCKER_IMAGE}
+
+#download: Downloads example dataset for redis
+download:
+	mkdir -p redis_data/
+	if [ ! -f "./redis_data/dump.rdb" ] ; then \
+	wget ${TEST_REDIS_DUMP_FILE} -O redis_data/dump.rdb; \
+	fi
+
+#run.local: seeds redis with data, builds web page and runs tranql docker container
+run.local: download
+	docker-compose up -d
+	cd src/tranql/web; npm start;
