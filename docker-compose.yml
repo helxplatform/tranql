@@ -7,8 +7,11 @@ services:
     ports:
       - "8001:8001"
     command: gunicorn --workers=1 --bind=0.0.0.0:8001 --name=tranql --timeout=600 --reload tranql.api:app
+    environment:
+      - SCHEMA_CONFIG_PATH=/home/tranql/dev-schema.yaml
     volumes:
       - ./src:/home/tranql/tranql/src
+      - ./dev-schema.yaml:/home/tranql/dev-schema.yaml
   redis_graph:
     image: redislabs/redisgraph
     volumes:
