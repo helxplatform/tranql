@@ -238,7 +238,9 @@ class Schema:
 
         """ Load the schema, a map of reasoner systems to maps of their schemas. """
         self.config = None
-        config_file = os.path.join(os.path.dirname(__file__), "conf", "schema.yaml")
+        config_file = os.environ.get("SCHEMA_CONFIG_PATH",
+                                    os.path.join(os.path.dirname(__file__), "conf", "schema.yaml")
+                                    )
         with open(config_file) as stream:
             self.config = yaml.safe_load(stream)
 

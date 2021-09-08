@@ -63,7 +63,7 @@ schema:
     url: "redis:test"
     redis: true
     redis_connection_params:
-      host: localhost
-      port: 6380
+      host: redis_graph
+      port: 6379
         # SET USERNAME and PASSWORD
         # via ROGER_USERNAME , ROGER_PASSWORD Env vars (i.e capitialize service name)
