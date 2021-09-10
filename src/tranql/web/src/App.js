@@ -1674,6 +1674,8 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
       };
       message.knowledge_graph.edges = newLinkArray;
     };
+    // NOTE: Pretty sure this is the culprit of a bug where the graph is set to the schema on page load,
+    // causing the graph view to display the schema until a query is made overriding it.
     this._configureMessage (message,false,false);
     this.setState({},() => {
       if (typeof noRenderChain === "undefined") noRenderChain = false;
