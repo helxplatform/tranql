@@ -90,13 +90,6 @@ class App extends Component {
   constructor(props) {
     /* Create state elements and initialize configuration. */
     super(props);
-    if(process.env.NODE_ENV === 'development') {
-      this.tranqlURL = "http://localhost:8001";
-    }
-    if(process.env.NODE_ENV === 'production') {
-      // behind proxy this would treat the path used to load index.html as root
-      this.tranqlURL = window.location.href.endsWith('/') ? window.location.href.substring(0, window.location.href.length - 1 ) : window.location.href.length ;
-    }
     //this.tranqlURL = window.location.origin;
     //this.tranqlURL = "http://localhost:8001"; // dev only
     this.robokop_url = "https://robokop.renci.org";
@@ -3495,6 +3488,14 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
       </div>
     );
   }
+}
+
+if(process.env.NODE_ENV === 'development') {
+  App.prototype.tranqlURL = "http://localhost:8001";
+}
+if(process.env.NODE_ENV === 'production') {
+  // behind proxy this would treat the path used to load index.html as root
+  App.prototype.tranqlURL = window.location.href.endsWith('/') ? window.location.href.substring(0, window.location.href.length - 1 ) : window.location.href.length ;
 }
 
 export default App;
