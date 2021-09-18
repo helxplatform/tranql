@@ -1715,6 +1715,7 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
            if (result !== undefined) {
              console.log("Got schema from cache");
              let msg = result.data;
+             console.log(JSON.stringify(msg));
              const prevMsg = this.state.message;
              const prevRecord = this.state.record;
              this._configureMessage(msg,false,true);
@@ -3490,12 +3491,11 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
   }
 }
 
-if(process.env.NODE_ENV === 'development') {
-  App.prototype.tranqlURL = "http://localhost:8001";
-}
 if(process.env.NODE_ENV === 'production') {
   // behind proxy this would treat the path used to load index.html as root
   App.prototype.tranqlURL = window.location.href.endsWith('/') ? window.location.href.substring(0, window.location.href.length - 1 ) : window.location.href.length ;
+} else {
+  App.prototype.tranqlURL = "http://localhost:8001";
 }
 
 export default App;
