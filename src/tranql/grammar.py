@@ -10,9 +10,9 @@ Statements can be 'set' or 'select' statements.
 
 """
 statement = Forward()
-SELECT, FROM, WHERE, SET, AS, CREATE, GRAPH, AT = map(
+SELECT, FROM, WHERE, SET, AS, CREATE, GRAPH, AT, LIMIT, MAX_CONNECTIVITY, SKIP = map(
     CaselessKeyword,
-    "select from where set as create graph at".split())
+    "select from where set as create graph at limit max_connectivity skip".split())
 
 concept_name    = Word( alphas, alphanums + ":_")
 ident          = Word( "$" + alphas, alphanums + "_$" ).setName("identifier")
@@ -78,6 +78,19 @@ whereCondition = Group(
     # ( columnName + in_ + (columnRval | Word(printables))) |
     ( "(" + whereExpression + ")" )
 )
+
+# query limit , max_connnectivity and skip expressions
+
+limit_option_exp = Forward()
+limit_option_statement = intNum
+limit_option_exp << limit_option_statement
+skip_option_exp = Forward()
+skip_option_statement = intNum
+skip_option_exp << skip_option_statement
+max_connectivity_option_exp = Forward()
+max_connectivity_option_statement = intNum
+max_connectivity_option_exp << max_connectivity_option_statement
+
 whereExpression << whereCondition + ZeroOrMore( ( and_ | or_ ) + whereExpression )
 
 ''' Assignment for handoff. '''
@@ -97,6 +110,11 @@ statement <<= (
         Group(SELECT + question_graph_expression)("concepts") + optWhite +
         Group(FROM + tableNameList) + optWhite +
         Group(Optional(WHERE + whereExpression("where"), "")) + optWhite +
+        Optional(
+            Group(Optional(LIMIT + limit_option_exp("limit"))) &
+            Group(Optional(SKIP + skip_option_exp("skip"))) &
+            Group(Optional(MAX_CONNECTIVITY + max_connectivity_option_exp("max_connectivity")))
+        ) + optWhite +
         Group(Optional(SET + setExpression("set"), ""))("select")
     )
     |

@@ -258,9 +258,13 @@ class SelectStatement(Statement):
         self.query = Query ()
         self.service = service
         self.where = []
+        self.limit = None
+        self.max_connectivity = None
+        self.skip = None
         self.set_statements = []
         self.jsonkit = JSONKit ()
         self.planner = QueryPlanStrategy (ast.schema)
+
 
     def __repr__(self):
         return f"SELECT {self.query} from:{self.service} where:{self.where} set:{self.set_statements}"
@@ -436,7 +440,11 @@ class SelectStatement(Statement):
                 if index == len(steps) - 1:
                     """ If this is the last concept, add the object as well. """
                     statement.query.add (obj)
+                # pass dow
                 statement.where = self.where
+                statement.limit = self.limit
+                statement.skip = self.skip
+                statement.max_connectivity = self.max_connectivity
         self.query.disable = True # = Query ()
         return statements
 
@@ -478,6 +486,14 @@ class SelectStatement(Statement):
         options = self.get_TRAPI_options(interpreter=interpreter)
         nodes = {}
         edges = {}
+
+        # add query options
+        # this will override what ever is passed down in where
+
+        options['limit'] = self.limit
+        options['skip'] = self.skip
+        options['max_connectivity'] = self.max_connectivity
+
         for index, concept_query_id in enumerate(self.query.order):
             """ Expand and filter nodes. """
             concept = self.query[concept_query_id]
@@ -625,16 +641,16 @@ class SelectStatement(Statement):
                 **redis_connection_params
             )
         options = question.get('options', {})
-        limit = options.get('limit', [])
-        skip = options.get('skip', [])
-        max_connections = options.get('max_connectivity', [])
+        limit = options.get('limit', None)
+        skip = options.get('skip', None)
+        max_connections = options.get('max_connectivity', None)
         cypher_query_options = {}
         if limit:
-            cypher_query_options['limit'] = limit[-1]
+            cypher_query_options['limit'] = limit
         if skip:
-            cypher_query_options['skip'] = skip[-1]
+            cypher_query_options['skip'] = skip
         if max_connections:
-            cypher_query_options['max_connectivity'] = max_connections[-1]
+            cypher_query_options['max_connectivity'] = max_connections
         answer = asyncio.run(
             graph_interface.answer_trapi_question(question['message']['query_graph'],
                                                   options=cypher_query_options,
@@ -869,8 +885,8 @@ class TranQL_AST:
         """ Parse a select statement. """
         select = SelectStatement (ast=self)
         for e in statement:
+            e = self.remove_whitespace (e, also=[[['']]])
             if self.is_command (e):
-                e = self.remove_whitespace (e)
                 command = e[0]
                 if command == 'select':
                     for token in e[1:]:
@@ -910,6 +926,13 @@ class TranQL_AST:
                     elif len(element) == 1:
                         select.set_statements.append (
                             SetStatement (variable=element[0]))
+                elif command == 'limit':
+                    select.limit = e[1]
+                elif command == 'skip':
+                    select.skip = e[1]
+                elif command == 'max_connectivity':
+                    select.max_connectivity = e[1]
+
         self.statements.append (select)
 
     def is_command (self, e):
