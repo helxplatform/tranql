@@ -1,8 +1,10 @@
 import React from 'react';
 import puppeteer from 'puppeteer';
 import ReactTestUtils from 'react-dom/test-utils';
-import App from '../App';
+import App from '../App.js';
 import { node } from 'prop-types';
+import { BrowserMode, SLEEP_INTERVAL } from '../setupTests.js';
+import { pageFinishesRequest } from '../testUtil.js';
 
 let MOCK_SCHEMA, MOCK_GRAPH;
 if (args.mocking) {
@@ -11,47 +13,49 @@ if (args.mocking) {
     MOCK_GRAPH = require("./mock/mock_graph.js");
 }
 
-let browser, page, schemaPage, graphPage;
+const DEBUGGING = args.browserMode === BrowserMode.DEBUG;
+
+let browser;
 
 beforeAll(async () => {
     browser = await puppeteer.launch({
-        headless: args.headless,
+        headless: args.browserMode === BrowserMode.HEADLESS,
         // Intercepting requests causing CORS issues so this needs to be disabled.
         args: [
             "--disable-web-security"
         ]
     });
-    page = await browser.newPage();
-    schemaPage = await browser.newPage();
-    graphPage = await browser.newPage();
-    await page.goto("http://localhost:3000", { waitUntil: "networkidle2" });
 });
 
 describe('App', async () => {
+    /**
+     * Base-line (control) test to verify that the app loads at all.
+     * The header is static and should always render unless something
+     * goes seriously wrong.
+     */
     test(
         "header renders",
         async () => {
+            const page = await browser.newPage();
+            await page.goto("http://localhost:3000");
             await page.waitForSelector("#headerContainer");
 
-            const header = await page.$eval("#headerContainer > p", e => e.innerHTML);
+            const header = await page.$eval("#headerContainer > p", e => e.innerText);
             expect(header).toEqual("TranQL");
 
         },
         30000
     );
-    test(
-        "args load",
-        async () => {
-            expect(args.mocking).toEqual(true);
-        },
-        30000
-    );
+    /**
+     * Verify that the app will successfully load and parse the schema.
+     */
     test(
         "schema loads",
         async () => {
             // Create a new page for testing if the schema loads.
             // Need to intercept requests to /tranql/schema. Wouldn't want
             // the requests to have already gone through by the time the test is run.
+            const schemaPage = await browser.newPage();
             await schemaPage.setRequestInterception(true);
             schemaPage.on("request", (req) => {
                 const url = new URL(req.url());
@@ -64,7 +68,7 @@ describe('App', async () => {
                     req.continue();
                 }
             });
-            await schemaPage.goto("http://localhost:3000", { waitUntil: "networkidle2" });
+            await schemaPage.goto("http://localhost:3000");
             const settingsButton = await schemaPage.waitForSelector("#settingsToolbar");
             // The click event is attached to an svg, which doesn't support `click`, and for some reason
             // will not trigger its handler from `dispatchEvent(new Event("click"))` either.
@@ -84,17 +88,24 @@ describe('App', async () => {
             await schemaPage.waitForFunction(`
                 document.querySelector("#clearCache").innerText === "Clear the cache (0B)"
             `);
-            await schemaPage.reload({ waitUntil : "networkidle2" });
+            await schemaPage.reload();
+            // Wait for the app to finish requesting the schema
+            await pageFinishesRequest(schemaPage, "/tranql/schema");
             await schemaPage.waitForSelector(".Legend");
             // todo: Provide dummy graph to React by mocking requests
             const legendNodes = await schemaPage.$eval(".graph-element-type-container > div > div", (el) => el.children.length);
+            if (DEBUGGING) await schemaPage.waitFor(SLEEP_INTERVAL);
             expect(legendNodes).toBeGreaterThan(0);            
         },
         600000
     );
+    /**
+     * Verify that the app will properly execute a query, parse its response, and render the force graph.
+     */
     test(
         "graph loads",
         async () => {
+            const graphPage = await browser.newPage();
             await graphPage.setRequestInterception(true);
             graphPage.on("request", (req) => {
                 const url = new URL(req.url());
@@ -107,9 +118,9 @@ describe('App', async () => {
                     req.continue();
                 }
             });
-            await graphPage.goto("http://localhost:3000", { waitUntil: "networkidle2" });
+            await graphPage.goto("http://localhost:3000");
             await graphPage.waitForSelector(".query-code > .CodeMirror");
-            const cmInstance = await graphPage.evaluate(async () => {
+            await graphPage.evaluate(async () => {
                 // Right now, there is no specific mocking structure to /tranql/query, it will just return the same
                 // static mock graph for any query made when mocking is enabled.
                 const testQuery = `
@@ -123,6 +134,7 @@ where disease="diabetes"
             });
             const runButton = await graphPage.waitForSelector("#runButton");
             runButton.click();
+            await pageFinishesRequest(graphPage, "/tranql/query");
             // Not sure why, but ReactForceGraph sets window.scene to the scene currently being rendered by it.
             // Or maybe this is happening somewhere deep in the app? It seems weird that ReactForceGraph would do this
             // because it would suggest that you could only render one graph per page.
@@ -156,6 +168,7 @@ where disease="diabetes"
 
                 }
             });
+            if (DEBUGGING) await graphPage.waitFor(SLEEP_INTERVAL);
             expect(Object.values(conditions).every((cond) => cond));
         },
         600000

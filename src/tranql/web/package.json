@@ -52,7 +52,7 @@
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
-    "test": "react-scripts test --transformIgnorePatterns \"/node_modules/(?!d3-force-graph)/\" --verbose true --testPathIgnorePatterns src/__tests__/mock -t \"graph loads\"",
+    "test": "react-scripts test --transformIgnorePatterns \"/node_modules/(?!d3-force-graph)/\" --verbose true --testPathIgnorePatterns src/__tests__/mock",
     "eject": "react-scripts eject",
     "storybook": "start-storybook -p 6006",
     "build-storybook": "build-storybook"
@@ -60,8 +60,7 @@
   "eslintConfig": {
     "extends": "react-app"
   },
-  "jest": {
-  },
+  "jest": {},
   "browserslist": [
     ">0.2%",
     "not dead",
