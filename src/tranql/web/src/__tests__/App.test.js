@@ -6,12 +6,9 @@ import { node } from 'prop-types';
 import { BrowserMode, SLEEP_INTERVAL } from '../setupTests.js';
 import { pageFinishesRequest } from '../testUtil.js';
 
-let MOCK_SCHEMA, MOCK_GRAPH;
-if (args.mocking) {
-    MOCK_SCHEMA = require("./mock/mock_schema.json");
-    // Has a comment regarding the query so is a JS file.
-    MOCK_GRAPH = require("./mock/mock_graph.js");
-}
+const MOCK_SCHEMA = require("./mock/mock_schema.json");
+// Has a comment about the query so it's a JS file.
+const MOCK_GRAPH = require("./mock/mock_graph.js");
 
 const DEBUGGING = args.browserMode === BrowserMode.DEBUG;
 
@@ -56,18 +53,20 @@ describe('App', async () => {
             // Need to intercept requests to /tranql/schema. Wouldn't want
             // the requests to have already gone through by the time the test is run.
             const schemaPage = await browser.newPage();
-            await schemaPage.setRequestInterception(true);
-            schemaPage.on("request", (req) => {
-                const url = new URL(req.url());
-                if (url.origin + url.pathname === App.prototype.tranqlURL + "/tranql/schema") {
-                    req.respond({
-                        contentType: "application/json",
-                        body: JSON.stringify(MOCK_SCHEMA)
-                    });
-                } else {
-                    req.continue();
-                }
-            });
+            if (args.mocking) {
+                await schemaPage.setRequestInterception(true);
+                schemaPage.on("request", (req) => {
+                    const url = new URL(req.url());
+                    if (url.origin + url.pathname === App.prototype.tranqlURL + "/tranql/schema") {
+                        req.respond({
+                            contentType: "application/json",
+                            body: JSON.stringify(MOCK_SCHEMA)
+                        });
+                    } else {
+                        req.continue();
+                    }
+                });
+            }
             await schemaPage.goto("http://localhost:3000");
             const settingsButton = await schemaPage.waitForSelector("#settingsToolbar");
             // The click event is attached to an svg, which doesn't support `click`, and for some reason
@@ -106,18 +105,20 @@ describe('App', async () => {
         "graph loads",
         async () => {
             const graphPage = await browser.newPage();
-            await graphPage.setRequestInterception(true);
-            graphPage.on("request", (req) => {
-                const url = new URL(req.url());
-                if (url.origin + url.pathname === App.prototype.tranqlURL + "/tranql/query") {
-                    req.respond({
-                        contentType: "application/json",
-                        body: JSON.stringify(MOCK_GRAPH)
-                    });
-                } else {
-                    req.continue();
-                }
-            });
+            if (args.mocking) {
+                await graphPage.setRequestInterception(true);
+                graphPage.on("request", (req) => {
+                    const url = new URL(req.url());
+                    if (url.origin + url.pathname === App.prototype.tranqlURL + "/tranql/query") {
+                        req.respond({
+                            contentType: "application/json",
+                            body: JSON.stringify(MOCK_GRAPH)
+                        });
+                    } else {
+                        req.continue();
+                    }
+                });
+            }
             await graphPage.goto("http://localhost:3000");
             await graphPage.waitForSelector(".query-code > .CodeMirror");
             await graphPage.evaluate(async () => {
@@ -169,7 +170,7 @@ where disease="diabetes"
                 }
             });
             if (DEBUGGING) await graphPage.waitFor(SLEEP_INTERVAL);
-            expect(Object.values(conditions).every((cond) => cond));
+            expect(Object.values(conditions).every((cond) => cond === true));
         },
         600000
     )
