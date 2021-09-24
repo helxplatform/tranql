@@ -6,7 +6,7 @@ import logging
 import os
 import yaml
 from flask import Flask
-from flask_restful import Api
+from flask_restx import Api
 from flasgger import Swagger
 from flask_cors import CORS
 from tranql.backplane.api.automat_api import AutomatQuery, AutomatSchema, AutomatRegistry

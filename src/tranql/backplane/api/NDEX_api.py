@@ -10,8 +10,8 @@ from tranql.backplane.api.standard_api import StandardAPIResource
 
 class PublishToNDEx(StandardAPIResource):
     """ Publish a graph to NDEx. """
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
     def post(self):
         """

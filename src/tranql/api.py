@@ -14,7 +14,7 @@ import yaml
 from flasgger import Swagger
 from flask import Flask, request, abort, Response, send_from_directory, render_template, make_response
 from flask_cors import CORS
-from flask_restful import Api, Resource
+from flask_restx import Api, Resource
 
 from tranql.concept import ConceptModel
 from tranql.exception import TranQLException
@@ -213,10 +213,6 @@ class Configuration(StandardAPIResource):
 
 class DecorateKG(StandardAPIResource):
     """ Exposes an endpoint that allows for the decoration of a KGS 0.1.0 knowledge graph with TranQL's decorate method. """
-
-    def __init__(self):
-        super().__init__()
-
     def post(self):
         """
         Decorate a Knowledge Graph
@@ -283,10 +279,6 @@ class DecorateKG(StandardAPIResource):
 
 class MergeMessages(StandardAPIResource):
     """ Exposes an endpoint that allows for the merging of an arbitrary amount of messages """
-
-    def __init__(self):
-        super().__init__()
-
     def post(self):
         """
         Merge Messages
@@ -387,10 +379,6 @@ class MergeMessages(StandardAPIResource):
 
 class TranQLQuery(StandardAPIResource):
     """ TranQL Resource. """
-
-    def __init__(self):
-        super().__init__()
-
     def post(self):
         """
         Query TranQL
@@ -470,10 +458,6 @@ class TranQLQuery(StandardAPIResource):
 
 class AnnotateGraph(StandardAPIResource):
     """ Request the message object to be annotated by the backplane and return the annotated message """
-
-    def __init__(self):
-        super().__init__()
-
     def post(self):
         """
         Annotate Graph
@@ -528,10 +512,6 @@ class AnnotateGraph(StandardAPIResource):
 
 class SchemaGraph(StandardAPIResource):
     """ Graph of schema to display to the client """
-
-    def __init__(self):
-        super().__init__()
-
     def get(self):
         """
         TranQL Schema
@@ -582,10 +562,6 @@ class SchemaGraph(StandardAPIResource):
 
 class ModelConceptsQuery(StandardAPIResource):
     """ Query model concepts. """
-
-    def __init__(self):
-        super().__init__()
-
     def post(self):
         """
         Biolink Model Concepts
@@ -616,10 +592,6 @@ class ModelConceptsQuery(StandardAPIResource):
 
 class ModelRelationsQuery(StandardAPIResource):
     """ Query model relations. """
-
-    def __init__(self):
-        super().__init__()
-
     def post(self):
         """
         Biolink Model Relations
@@ -650,10 +622,6 @@ class ModelRelationsQuery(StandardAPIResource):
 
 class ReasonerURLs(StandardAPIResource):
     """ Returns the URLs corresponding to `reasoner` properties. """
-
-    def __init__(self):
-        super().__init__()
-
     def get(self):
         """
         Retrieve Reasoner URLs
@@ -675,10 +643,6 @@ class ReasonerURLs(StandardAPIResource):
 
 class ParseIncomplete(StandardAPIResource):
     """ Tokenizes an incomplete query and returns the result """
-
-    def __init__(self):
-        super().__init__()
-
     def parse(self, parser, query):
         if isinstance(query, str):
             parsed = parser.tokenize(query)
