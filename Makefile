@@ -45,7 +45,8 @@ test.python:
 
 #test.npm: Run all NPM tests
 test.npm:
-	echo "test NPM"
+	cd src/tranql/web
+	npm test
 
 #test: Run all tests
 test: test.python test.npm
