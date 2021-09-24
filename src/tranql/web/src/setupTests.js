@@ -1,7 +1,7 @@
 jest.mock("../node_modules/elasticlunr/elasticlunr.js", () => {});
 
 // The amount of time (in ms) that tests will periodically sleep for when browser mode is set to DEBUG.
-export const SLEEP_INTERVAL = 2500;
+export const SLEEP_INTERVAL = 1000;
 export const BrowserMode = Object.freeze({
     // Fastest, runs tests on a headless Chromium instance.
     HEADLESS: 0,

@@ -12,7 +12,18 @@ const MOCK_GRAPH = require("./mock/mock_graph.js");
 
 const DEBUGGING = args.browserMode === BrowserMode.DEBUG;
 
+/**
+ * Global Puppeteer variables
+ */
 let browser;
+let graphPage;
+
+/**
+ * Global test-set variables (i.e., data derived from the website that it used in multiple sequential tests)
+ */
+
+// This is set in the "graph loads" test, which intercepts the request to /tranql/query and sets it to the response/mock response.
+let loadedForceGraph;
 
 beforeAll(async () => {
     browser = await puppeteer.launch({
@@ -104,21 +115,21 @@ describe('App', async () => {
     test(
         "graph loads",
         async () => {
-            const graphPage = await browser.newPage();
-            if (args.mocking) {
-                await graphPage.setRequestInterception(true);
-                graphPage.on("request", (req) => {
-                    const url = new URL(req.url());
-                    if (url.origin + url.pathname === App.prototype.tranqlURL + "/tranql/query") {
-                        req.respond({
-                            contentType: "application/json",
-                            body: JSON.stringify(MOCK_GRAPH)
-                        });
-                    } else {
-                        req.continue();
-                    }
-                });
-            }
+            graphPage = await browser.newPage();
+            await graphPage.setRequestInterception(true);
+            graphPage.on("request", (req) => {
+                const url = new URL(req.url());
+                if (url.origin + url.pathname === App.prototype.tranqlURL + "/tranql/query") {
+                    const body = args.mocking ? JSON.stringify(MOCK_GRAPH) : req.body;
+                    req.respond({
+                        contentType: "application/json",
+                        body
+                    });
+                    loadedForceGraph = JSON.parse(body);
+                } else {
+                    req.continue();
+                }
+            });
             await graphPage.goto("http://localhost:3000");
             await graphPage.waitForSelector(".query-code > .CodeMirror");
             await graphPage.evaluate(async () => {
@@ -136,6 +147,9 @@ where disease="diabetes"
             const runButton = await graphPage.waitForSelector("#runButton");
             runButton.click();
             await pageFinishesRequest(graphPage, "/tranql/query");
+            // Wait for window.scene to be set
+            await graphPage.waitForFunction(`window.scene !== undefined`);
+
             // Not sure why, but ReactForceGraph sets window.scene to the scene currently being rendered by it.
             // Or maybe this is happening somewhere deep in the app? It seems weird that ReactForceGraph would do this
             // because it would suggest that you could only render one graph per page.
@@ -149,30 +163,44 @@ where disease="diabetes"
                 // Their type is stored in the __graphObjType attribute ("node"|"link")
                 return kapsule.children.map((element) => element.__data.origin);
             });
-            const conditions = {
-                "MONDO:0015790": false,
-                "MONDO:0030087": false,
-                "MONDO:0005147": false,
-                "MONDO:0014523-[has_phenotype]->HP:0007366": false
-            };
+            const renderedNodes = [];
+            const renderedEdges = [];
             elements.forEach((el) => {
-                if (el.hasOwnProperty("source_id")) {
-                    // Edge
-                    if (el.source_id === "MONDO:0014523" && el.target_id === "HP:0007366" && el.type === "has_phenotype") {
-                        conditions["MONDO:0014523-[has_phenotype]->HP:0007366"] = true;
-                    }
-                } else {
-                    // Node
-                    if (el.id === "MONDO:0015790") conditions["MONDO:0015790"] = true;
-                    if (el.id === "MONDO:0030087") conditions["MONDO:0030087"] = true;
-                    if (el.id === "MONDO:0005147") conditions["MONDO:0005147"] = true;
-
-                }
+                if (el.hasOwnProperty("source_id")) renderedEdges.push(el);
+                else renderedNodes.push(el.id);
+            });
+            Object.keys(loadedForceGraph.message.knowledge_graph.nodes).forEach((nId) => {
+                expect(renderedNodes.includes(nId)).toEqual(true);
+            });
+            Object.values(loadedForceGraph.message.knowledge_graph.edges).forEach((edge) => {
+                const graphHasEdge = renderedEdges.some((rEdge) => {
+                    return (
+                        rEdge.subject === edge.subject &&
+                        rEdge.object === edge.object &&
+                        rEdge.predicate === edge.predicate
+                    );
+                });
+                expect(graphHasEdge).toEqual(true);
             });
             if (DEBUGGING) await graphPage.waitFor(SLEEP_INTERVAL);
-            expect(Object.values(conditions).every((cond) => cond === true));
         },
         600000
+    );
+    /* ##################
+     * # Graph subtests #
+     * ##################
+     */
+
+    /**
+     * Verify that the legend properly hides and unhides graph types
+     */
+    test(
+        "legend works",
+        async () => {
+            // The type of node/edge that it hides is arbitrary, just take the first one in the graph.
+
+        },
+        10000
     )
 });
 
