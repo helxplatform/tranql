@@ -35,6 +35,29 @@ beforeAll(async () => {
     });
 });
 
+async function getThreeElements(page) {
+    // Wait for window.scene to be set
+    await page.waitForFunction(`window.scene !== undefined`);
+
+    // Not sure why, but ReactForceGraph sets window.scene to the scene currently being rendered by it.
+    // Or maybe this is happening somewhere deep in the app? It seems weird that ReactForceGraph would do this
+    // because it would suggest that you could only render one graph per page.
+    // Regardless, just use the scene variable for now because there doesn't seem to be a way to access the internal
+    // Three.js scene from just a DOM node, so you would have to set a global variable in the App anyways.
+    const elements = await page.evaluate(getThreeElementsFromWindow);
+    return elements;
+}
+function getThreeElementsFromWindow() {
+    // FromKapsule is the object that ReactForceGraph stores objects in.
+    const kapsule = window.scene.children.find((i) => i.constructor.name === "FromKapsule");
+    // kapsule.children contains Mesh objects (each representing either a node or link).
+    // Their data is stored in the __data attribute.
+    // Their type is stored in the __graphObjType attribute ("node"|"link")
+
+    // This is mutable and will reflect changes in Three.js scene.
+    return kapsule.children.map((element) => element.__data.origin);
+}
+
 describe('App', async () => {
     /**
      * Base-line (control) test to verify that the app loads at all.
@@ -147,22 +170,13 @@ where disease="diabetes"
             const runButton = await graphPage.waitForSelector("#runButton");
             runButton.click();
             await pageFinishesRequest(graphPage, "/tranql/query");
-            // Wait for window.scene to be set
-            await graphPage.waitForFunction(`window.scene !== undefined`);
 
-            // Not sure why, but ReactForceGraph sets window.scene to the scene currently being rendered by it.
-            // Or maybe this is happening somewhere deep in the app? It seems weird that ReactForceGraph would do this
-            // because it would suggest that you could only render one graph per page.
-            // Regardless, just use the scene variable for now because there doesn't seem to be a way to access the internal
-            // Three.js scene from just a DOM node, so you would have to set a global variable in the App anyways.
-            const elements = await graphPage.evaluate(async () => {
-                // FromKapsule is the object that ReactForceGraph stores objects in.
-                const kapsule = window.scene.children.find((i) => i.constructor.name === "FromKapsule");
-                // kapsule.children contains Mesh objects (each representing either a node or link).
-                // Their data is stored in the __data attribute.
-                // Their type is stored in the __graphObjType attribute ("node"|"link")
-                return kapsule.children.map((element) => element.__data.origin);
-            });
+            // Assert that the query returns a proper message
+            expect(loadedForceGraph.message).not.toEqual(undefined);
+            expect(loadedForceGraph.message.knowledge_graph).not.toEqual(undefined);
+
+            const elements = await getThreeElements(graphPage);
+
             const renderedNodes = [];
             const renderedEdges = [];
             elements.forEach((el) => {
@@ -197,7 +211,37 @@ where disease="diabetes"
     test(
         "legend works",
         async () => {
-            // The type of node/edge that it hides is arbitrary, just take the first one in the graph.
+            const [nodeLabel, linkLabel] = await graphPage.$$(".Legend .graph-element-content label:last-child");
+            const nodeType = await nodeLabel.$eval("b", (e) => e.innerText);
+            const linkType = await linkLabel.$eval("b", (e) => e.innerText);
+
+            const originalLength = (await getThreeElements(graphPage)).length;
+
+            // Hide these labels
+            await nodeLabel.click();
+            await linkLabel.click();
+
+
+            (await getThreeElements(graphPage)).forEach((element) => {
+                if (element.hasOwnProperty("source_id")) {
+                    // Assert that no link in the new graph has the hidden type
+                    expect(element.predicate).not.toEqual(linkType);
+                } else {
+                    // Assert that no node in the new graph has the hidden type
+                    expect(element.type.includes(nodeType)).toEqual(false);
+                }
+            });
+
+            if (DEBUGGING) await graphPage.waitFor(SLEEP_INTERVAL);
+
+            // Show the labels again
+            await nodeLabel.click();
+            await linkLabel.click();
+
+            // Assert that the graph has the same amount of nodes/links as before
+            expect((await getThreeElements(graphPage)).length).toEqual(originalLength);
+
+            if (DEBUGGING) await graphPage.waitFor(SLEEP_INTERVAL);
 
         },
         10000
