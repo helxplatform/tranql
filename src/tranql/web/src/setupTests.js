@@ -1,5 +1,8 @@
 jest.mock("../node_modules/elasticlunr/elasticlunr.js", () => {});
 
+// Test the website served through Node.js
+export const WEBSITE_URL = "http://localhost:3000";
+
 // The amount of time (in ms) that tests will periodically sleep for when browser mode is set to DEBUG.
 export const SLEEP_INTERVAL = 1000;
 export const BrowserMode = Object.freeze({

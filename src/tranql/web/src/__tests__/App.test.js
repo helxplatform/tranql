@@ -3,12 +3,13 @@ import puppeteer from 'puppeteer';
 import ReactTestUtils from 'react-dom/test-utils';
 import App from '../App.js';
 import { node } from 'prop-types';
-import { BrowserMode, SLEEP_INTERVAL } from '../setupTests.js';
+import { BrowserMode, SLEEP_INTERVAL, WEBSITE_URL } from '../setupTests.js';
 import { pageFinishesRequest } from '../testUtil.js';
 
+// Note: mocks requiring comments are JS files.
 const MOCK_SCHEMA = require("./mock/mock_schema.json");
-// Has a comment about the query so it's a JS file.
 const MOCK_GRAPH = require("./mock/mock_graph.js");
+const MOCK_PARSE_INCOMPLETE = require("./mock/mock_parse_incomplete.js");
 
 const DEBUGGING = args.browserMode === BrowserMode.DEBUG;
 
@@ -24,6 +25,8 @@ let graphPage;
 
 // This is set in the "graph loads" test, which intercepts the request to /tranql/query and sets it to the response/mock response.
 let loadedForceGraph;
+// Loaded in "schema loads" test. Same as loadedForceGraph but for schema.
+let loadedSchemaGraph;
 
 beforeAll(async () => {
     browser = await puppeteer.launch({
@@ -44,10 +47,10 @@ async function getThreeElements(page) {
     // because it would suggest that you could only render one graph per page.
     // Regardless, just use the scene variable for now because there doesn't seem to be a way to access the internal
     // Three.js scene from just a DOM node, so you would have to set a global variable in the App anyways.
-    const elements = await page.evaluate(getThreeElementsFromWindow);
+    const elements = await page.evaluate(_getThreeElementsFromWindow);
     return elements;
 }
-function getThreeElementsFromWindow() {
+function _getThreeElementsFromWindow() {
     // FromKapsule is the object that ReactForceGraph stores objects in.
     const kapsule = window.scene.children.find((i) => i.constructor.name === "FromKapsule");
     // kapsule.children contains Mesh objects (each representing either a node or link).
@@ -68,7 +71,7 @@ describe('App', async () => {
         "header renders",
         async () => {
             const page = await browser.newPage();
-            await page.goto("http://localhost:3000");
+            await page.goto(WEBSITE_URL);
             await page.waitForSelector("#headerContainer");
 
             const header = await page.$eval("#headerContainer > p", e => e.innerText);
@@ -87,21 +90,21 @@ describe('App', async () => {
             // Need to intercept requests to /tranql/schema. Wouldn't want
             // the requests to have already gone through by the time the test is run.
             const schemaPage = await browser.newPage();
-            if (args.mocking) {
-                await schemaPage.setRequestInterception(true);
-                schemaPage.on("request", (req) => {
-                    const url = new URL(req.url());
-                    if (url.origin + url.pathname === App.prototype.tranqlURL + "/tranql/schema") {
-                        req.respond({
-                            contentType: "application/json",
-                            body: JSON.stringify(MOCK_SCHEMA)
-                        });
-                    } else {
-                        req.continue();
-                    }
-                });
-            }
-            await schemaPage.goto("http://localhost:3000");
+            await schemaPage.setRequestInterception(true);
+            schemaPage.on("request", (req) => {
+                const url = new URL(req.url());
+                if (url.origin + url.pathname === App.prototype.tranqlURL + "/tranql/schema") {
+                    const body = args.mocking ? JSON.stringify(MOCK_SCHEMA) : req.body;
+                    req.respond({
+                        contentType: "application/json",
+                        body
+                    });
+                    loadedSchemaGraph = JSON.parse(body);
+                } else {
+                    req.continue();
+                }
+            });
+            await schemaPage.goto(WEBSITE_URL);
             const settingsButton = await schemaPage.waitForSelector("#settingsToolbar");
             // The click event is attached to an svg, which doesn't support `click`, and for some reason
             // will not trigger its handler from `dispatchEvent(new Event("click"))` either.
@@ -124,6 +127,11 @@ describe('App', async () => {
             await schemaPage.reload();
             // Wait for the app to finish requesting the schema
             await pageFinishesRequest(schemaPage, "/tranql/schema");
+
+            // Assert that the schema returns a proper message
+            expect(loadedSchemaGraph.schema).not.toEqual(undefined);
+            expect(loadedSchemaGraph.schema.knowledge_graph).not.toEqual(undefined);
+
             await schemaPage.waitForSelector(".Legend");
             // todo: Provide dummy graph to React by mocking requests
             const legendNodes = await schemaPage.$eval(".graph-element-type-container > div > div", (el) => el.children.length);
@@ -132,6 +140,76 @@ describe('App', async () => {
         },
         600000
     );
+    /**
+     * This is a barebones test to ensure that autocompletion suggests load, display properly, and modify the code properly.
+     * It isn't rigorous because the actual grammar should be tested in the backend, not here.
+     * 
+     * Note: since the frontend handles suggesting schema-aware completions, this test should be extended to test all suggestion functionalities
+     * such as schema-aware predicate completion, arrow completion, schema completion (i.e. `from` statements), etc.
+     *  - This would involve making the main part the test reusable, so that various different `/tranql/parse_incomplete`
+     *    responses could be tested.
+     *  - Also would involve adding a mock helper most likely.
+     *
+     */
+    test(
+        "autocompletion works",
+        async () => {
+            const query = "select ";
+
+            const page = await browser.newPage();
+            await page.setRequestInterception(true);
+            page.on("request", (req) => {
+                const url = new URL(req.url());
+                if (url.origin + url.pathname === App.prototype.tranqlURL + "/tranql/parse_incomplete") {
+                    const body = args.mocking ? JSON.stringify(MOCK_PARSE_INCOMPLETE) : req.body;
+                    req.respond({
+                        contentType: "application/json",
+                        body
+                    });
+                } else {
+                    req.continue();
+                }
+            });
+
+            await page.goto(WEBSITE_URL);
+            await page.evaluate(async (query) => {
+                const cmInstance = document.querySelector(".query-code > .CodeMirror").CodeMirror;
+
+                cmInstance.setValue(query);
+                cmInstance.setCursor({line: 0, ch: query.length});
+                // Call the autocomplete function attached to "ctrl + space" shortcut.
+                cmInstance.options.extraKeys["Ctrl-Space"]();
+            }, query);
+            await pageFinishesRequest(page, "/tranql/parse_incomplete");
+            await page.waitForFunction(async () => {
+                const cmInstance = document.querySelector(".query-code > .CodeMirror").CodeMirror;
+                return cmInstance.state.completionActive !== undefined && cmInstance.state.completionActive.data.list[0].displayText !== "Loading";
+            });
+            const completions = await page.evaluate(() => {
+                const cmInstance = document.querySelector(".query-code > .CodeMirror").CodeMirror;
+                return cmInstance.state.completionActive.data.list;
+            });
+            const completionTexts = completions.map((completion) => completion.displayText);
+            loadedSchemaGraph.schema.knowledge_graph.nodes.forEach((n) => {
+                const [nodeName, nodeProps] = n;
+                expect(completionTexts.includes(nodeName)).toEqual(true);
+            });
+
+            if (DEBUGGING) await page.waitFor(SLEEP_INTERVAL);
+
+            const cmValue = await page.evaluate(async () => {
+                const cmInstance = document.querySelector(".query-code > .CodeMirror").CodeMirror;
+                cmInstance.state.completionActive.widget.changeActive(0);
+                cmInstance.state.completionActive.widget.pick();
+
+                return cmInstance.getValue();
+            });
+
+            expect(cmValue).toEqual(query + completionTexts[0]);
+
+            if (DEBUGGING) await page.waitFor(SLEEP_INTERVAL);
+        }
+    )
     /**
      * Verify that the app will properly execute a query, parse its response, and render the force graph.
      */
@@ -153,7 +231,7 @@ describe('App', async () => {
                     req.continue();
                 }
             });
-            await graphPage.goto("http://localhost:3000");
+            await graphPage.goto(WEBSITE_URL);
             await graphPage.waitForSelector(".query-code > .CodeMirror");
             await graphPage.evaluate(async () => {
                 // Right now, there is no specific mocking structure to /tranql/query, it will just return the same
@@ -245,7 +323,7 @@ where disease="diabetes"
 
         },
         10000
-    )
+    );
 });
 
 afterAll(() => {
