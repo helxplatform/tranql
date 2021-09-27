@@ -4,12 +4,9 @@ import ReactTestUtils from 'react-dom/test-utils';
 import App from '../App.js';
 import { node } from 'prop-types';
 import { BrowserMode, SLEEP_INTERVAL, WEBSITE_URL } from '../setupTests.js';
-import { pageFinishesRequest } from '../testUtil.js';
+import { mockEndpoint, Mocker, pageFinishesRequest, Mocker as MockHelper } from '../testUtil.js';
 
-// Note: mocks requiring comments are JS files.
-const MOCK_SCHEMA = require("./mock/mock_schema.json");
-const MOCK_GRAPH = require("./mock/mock_graph.js");
-const MOCK_PARSE_INCOMPLETE = require("./mock/mock_parse_incomplete.js");
+const mocker = new MockHelper();
 
 const DEBUGGING = args.browserMode === BrowserMode.DEBUG;
 
@@ -90,20 +87,8 @@ describe('App', async () => {
             // Need to intercept requests to /tranql/schema. Wouldn't want
             // the requests to have already gone through by the time the test is run.
             const schemaPage = await browser.newPage();
-            await schemaPage.setRequestInterception(true);
-            schemaPage.on("request", (req) => {
-                const url = new URL(req.url());
-                if (url.origin + url.pathname === App.prototype.tranqlURL + "/tranql/schema") {
-                    const body = args.mocking ? JSON.stringify(MOCK_SCHEMA) : req.body;
-                    req.respond({
-                        contentType: "application/json",
-                        body
-                    });
-                    loadedSchemaGraph = JSON.parse(body);
-                } else {
-                    req.continue();
-                }
-            });
+            // Set the mocker to mock the schema endpoint.
+            await mocker.mock(schemaPage, "schema");
             await schemaPage.goto(WEBSITE_URL);
             const settingsButton = await schemaPage.waitForSelector("#settingsToolbar");
             // The click event is attached to an svg, which doesn't support `click`, and for some reason
@@ -125,8 +110,9 @@ describe('App', async () => {
                 document.querySelector("#clearCache").innerText === "Clear the cache (0B)"
             `);
             await schemaPage.reload();
-            // Wait for the app to finish requesting the schema
-            await pageFinishesRequest(schemaPage, "/tranql/schema");
+            
+            const res = await mocker.resolveResponse(schemaPage, "schema");
+            loadedSchemaGraph = await res.json();
 
             // Assert that the schema returns a proper message
             expect(loadedSchemaGraph.schema).not.toEqual(undefined);
@@ -157,19 +143,8 @@ describe('App', async () => {
             const query = "select ";
 
             const page = await browser.newPage();
-            await page.setRequestInterception(true);
-            page.on("request", (req) => {
-                const url = new URL(req.url());
-                if (url.origin + url.pathname === App.prototype.tranqlURL + "/tranql/parse_incomplete") {
-                    const body = args.mocking ? JSON.stringify(MOCK_PARSE_INCOMPLETE) : req.body;
-                    req.respond({
-                        contentType: "application/json",
-                        body
-                    });
-                } else {
-                    req.continue();
-                }
-            });
+            
+            await mocker.mock(page, "parse_incomplete_select");
 
             await page.goto(WEBSITE_URL);
             await page.evaluate(async (query) => {
@@ -180,7 +155,8 @@ describe('App', async () => {
                 // Call the autocomplete function attached to "ctrl + space" shortcut.
                 cmInstance.options.extraKeys["Ctrl-Space"]();
             }, query);
-            await pageFinishesRequest(page, "/tranql/parse_incomplete");
+            await mocker.resolveResponse(page, "parse_incomplete_select");
+            
             await page.waitForFunction(async () => {
                 const cmInstance = document.querySelector(".query-code > .CodeMirror").CodeMirror;
                 return cmInstance.state.completionActive !== undefined && cmInstance.state.completionActive.data.list[0].displayText !== "Loading";
@@ -208,7 +184,8 @@ describe('App', async () => {
             expect(cmValue).toEqual(query + completionTexts[0]);
 
             if (DEBUGGING) await page.waitFor(SLEEP_INTERVAL);
-        }
+        },
+        60000
     )
     /**
      * Verify that the app will properly execute a query, parse its response, and render the force graph.
@@ -217,37 +194,24 @@ describe('App', async () => {
         "graph loads",
         async () => {
             graphPage = await browser.newPage();
-            await graphPage.setRequestInterception(true);
-            graphPage.on("request", (req) => {
-                const url = new URL(req.url());
-                if (url.origin + url.pathname === App.prototype.tranqlURL + "/tranql/query") {
-                    const body = args.mocking ? JSON.stringify(MOCK_GRAPH) : req.body;
-                    req.respond({
-                        contentType: "application/json",
-                        body
-                    });
-                    loadedForceGraph = JSON.parse(body);
-                } else {
-                    req.continue();
-                }
-            });
+            await mocker.mock(graphPage, "query_disease_phenotypic_feature_diabetes");
             await graphPage.goto(WEBSITE_URL);
             await graphPage.waitForSelector(".query-code > .CodeMirror");
             await graphPage.evaluate(async () => {
                 // Right now, there is no specific mocking structure to /tranql/query, it will just return the same
                 // static mock graph for any query made when mocking is enabled.
-                const testQuery = `
-select disease->phenotypic_feature
+                const testQuery = `select disease->phenotypic_feature
  from "redis:test"
-where disease="diabetes"
-                `;
+where disease="diabetes"`;
                 const el = document.querySelector(".query-code > .CodeMirror");
                 const cmInstance = el.CodeMirror;
                 cmInstance.setValue(testQuery);
             });
             const runButton = await graphPage.waitForSelector("#runButton");
             runButton.click();
-            await pageFinishesRequest(graphPage, "/tranql/query");
+
+            const res = await mocker.resolveResponse(graphPage, "query_disease_phenotypic_feature_diabetes")
+            loadedForceGraph = await res.json();
 
             // Assert that the query returns a proper message
             expect(loadedForceGraph.message).not.toEqual(undefined);
