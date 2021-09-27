@@ -5,6 +5,7 @@ import App from '../App.js';
 import { node } from 'prop-types';
 import { BrowserMode, SLEEP_INTERVAL, WEBSITE_URL } from '../setupTests.js';
 import { mockEndpoint, Mocker, pageFinishesRequest, Mocker as MockHelper } from '../testUtil.js';
+const util = require("util");
 
 const mocker = new MockHelper();
 
@@ -127,7 +128,7 @@ describe('App', async () => {
         600000
     );
     /**
-     * This is a barebones test to ensure that autocompletion suggests load, display properly, and modify the code properly.
+     * This is a test to ensure that autocompletion suggests load, display properly, and modify the code properly.
      * It isn't rigorous because the actual grammar should be tested in the backend, not here.
      * 
      * Note: since the frontend handles suggesting schema-aware completions, this test should be extended to test all suggestion functionalities
@@ -137,55 +138,75 @@ describe('App', async () => {
      *  - Also would involve adding a mock helper most likely.
      *
      */
+
     test(
         "autocompletion works",
         async () => {
-            const query = "select ";
-
             const page = await browser.newPage();
-            
-            await mocker.mock(page, "parse_incomplete_select");
-
             await page.goto(WEBSITE_URL);
-            await page.evaluate(async (query) => {
-                const cmInstance = document.querySelector(".query-code > .CodeMirror").CodeMirror;
-
-                cmInstance.setValue(query);
-                cmInstance.setCursor({line: 0, ch: query.length});
-                // Call the autocomplete function attached to "ctrl + space" shortcut.
-                cmInstance.options.extraKeys["Ctrl-Space"]();
-            }, query);
-            await mocker.resolveResponse(page, "parse_incomplete_select");
+            await mocker.mock(page, ["parse_incomplete_single_select", "parse_incomplete_forward_select_complete"]);
             
-            await page.waitForFunction(async () => {
-                const cmInstance = document.querySelector(".query-code > .CodeMirror").CodeMirror;
-                return cmInstance.state.completionActive !== undefined && cmInstance.state.completionActive.data.list[0].displayText !== "Loading";
-            });
-            const completions = await page.evaluate(() => {
-                const cmInstance = document.querySelector(".query-code > .CodeMirror").CodeMirror;
-                return cmInstance.state.completionActive.data.list;
-            });
-            const completionTexts = completions.map((completion) => completion.displayText);
-            loadedSchemaGraph.schema.knowledge_graph.nodes.forEach((n) => {
-                const [nodeName, nodeProps] = n;
-                expect(completionTexts.includes(nodeName)).toEqual(true);
-            });
-
-            if (DEBUGGING) await page.waitFor(SLEEP_INTERVAL);
-
-            const cmValue = await page.evaluate(async () => {
-                const cmInstance = document.querySelector(".query-code > .CodeMirror").CodeMirror;
-                cmInstance.state.completionActive.widget.changeActive(0);
-                cmInstance.state.completionActive.widget.pick();
-
-                return cmInstance.getValue();
-            });
-
-            expect(cmValue).toEqual(query + completionTexts[0]);
-
-            if (DEBUGGING) await page.waitFor(SLEEP_INTERVAL);
+            async function testAutocomplete(query, cursorPos, mockName, expectedResults, resultingQuery) {
+                await page.evaluate(async (query, cursorPos) => {
+                    const cmInstance = document.querySelector(".query-code > .CodeMirror").CodeMirror;
+            
+                    cmInstance.setValue(query);
+                    cmInstance.setCursor(cursorPos);
+                    // Call the autocomplete function attached to "ctrl + space" shortcut.
+                    cmInstance.options.extraKeys["Ctrl-Space"]();
+                }, query, cursorPos);
+                await mocker.resolveResponse(page, mockName);
+                
+                await page.waitForFunction(async () => {
+                    const cmInstance = document.querySelector(".query-code > .CodeMirror").CodeMirror;
+                    return cmInstance.state.completionActive !== undefined && cmInstance.state.completionActive.data.list[0].displayText !== "Loading";
+                });
+                const completions = await page.evaluate(() => {
+                    const cmInstance = document.querySelector(".query-code > .CodeMirror").CodeMirror;
+                    return cmInstance.state.completionActive.data.list;
+                });
+                const completionTexts = completions.map((completion) => completion.displayText);
+                expectedResults.forEach((result) => {
+                    if (!completionTexts.includes(result)) throw new Error(`${JSON.stringify(completionTexts)}, ${result}`)
+                    expect(completionTexts.includes(result)).toEqual(true);
+                });
+                if (DEBUGGING) await page.waitFor(SLEEP_INTERVAL);
+                const cmValue = await page.evaluate(async () => {
+                    const cmInstance = document.querySelector(".query-code > .CodeMirror").CodeMirror;
+                    cmInstance.state.completionActive.widget.changeActive(0);
+                    cmInstance.state.completionActive.widget.pick();
+            
+                    return cmInstance.getValue();
+                });
+                expect(cmValue).toEqual(util.format(resultingQuery, completionTexts[0]));
+                if (DEBUGGING) await page.waitFor(SLEEP_INTERVAL);
+            }
+            const tests = [
+                [
+                    "select ",
+                    {line: 0, ch: 7},
+                    "parse_incomplete_single_select",
+                    // Expect every node in the schema to be suggested
+                    loadedSchemaGraph.schema.knowledge_graph.nodes.map((n) => n[0]),
+                    "select %s"
+                ],
+                [
+                    `select disease->
+ from "redis:test"
+where disease="asthma"`,
+                    {line: 0, ch: 16},
+                    "parse_incomplete_forward_select_complete",
+                    // Expect the target node of every edge with source "disease", i.e. every node with an edge with source "disease".
+                    // Leave out self-referencing nodes (disease->disease) which aren't currently supported in the force graph and are removed.
+                    loadedSchemaGraph.schema.knowledge_graph.edges.filter((e) => e[0] === "disease" && e[1] !== "disease").map((e) => e[1]),
+                    `select disease->%s
+ from "redis:test"
+where disease="asthma"`,
+                ]
+            ];
+            for (let i=0; i<tests.length; i++) await testAutocomplete(...tests[i]);
         },
-        60000
+        30000
     )
     /**
      * Verify that the app will properly execute a query, parse its response, and render the force graph.

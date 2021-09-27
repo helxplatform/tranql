@@ -58,14 +58,25 @@ where disease="diabetes"`,
                     }
                 },
                 {
-                    name: "parse_incomplete_select",
+                    name: "parse_incomplete_single_select",
                     endpoint: "/tranql/parse_incomplete",
                     request: {
                         body: `["select ","select "]`
                     },
                     response: {
                         contentType: "application/json",
-                        body: JSON.stringify(require("./__tests__/mock/mock_parse_incomplete.js"))
+                        body: JSON.stringify(require("./__tests__/mock/mock_parse_incomplete_single_select.js"))
+                    }
+                },
+                {
+                    name: "parse_incomplete_forward_select_complete",
+                    endpoint: "/tranql/parse_incomplete",
+                    request: {
+                        body: `["select disease->","select disease->\\n from \\"redis:test\\"\\nwhere disease=\\"asthma\\""]`
+                    },
+                    response: {
+                        contentType: "application/json",
+                        body: JSON.stringify(require("./__tests__/mock/mock_parse_incomplete_forward_select_complete.json"))
                     }
                 }
         ];
@@ -79,6 +90,9 @@ where disease="diabetes"`,
     async mock(page, specificMocks=undefined) {
         if (typeof specificMocks === "undefined") specificMocks = this.mocks.map((m) => m.name).filter((name) => name !== undefined);
         if (typeof specificMocks === "string") specificMocks = [specificMocks];
+        specificMocks.forEach((mockName) => {
+            if (!this.mocks.map((m) => m.name).includes(mockName)) throw new Error(`Mock "${mockName}" does not exist.`);
+        });
         await page.setRequestInterception(true);
         page.on("request", (req) => {
             const responded = false;
