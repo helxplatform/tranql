@@ -34,7 +34,16 @@ export function pageFinishesRequest(page, apiPath) {
  */
 
 export class Mocker {
-    constructor() {
+    /**
+     * 
+     * @param {object} options
+     * @param {string} options.verbose - Verbose information about mocking.
+     */
+    constructor(options) {
+        if (typeof options === "undefined") options = {};
+        this.options = {
+            verbose: options.verbose || false
+        };
         this.mocks = [
                 {
                     name: "query_disease_phenotypic_feature_diabetes",
@@ -78,6 +87,14 @@ where disease="diabetes"`,
                         contentType: "application/json",
                         body: JSON.stringify(require("./__tests__/mock/mock_parse_incomplete_forward_select_complete.json"))
                     }
+                },
+                {
+                    name: "reasoner_urls",
+                    endpoint: "/tranql/reasonerURLs",
+                    response: {
+                        contentType: "application/json",
+                        body: JSON.stringify(require("./__tests__/mock/mock_reasoner_urls.json"))
+                    }
                 }
         ];
     }
@@ -99,6 +116,7 @@ where disease="diabetes"`,
             this.mocks.forEach((mock) => {
                 if (args.mocking && specificMocks.includes(mock.name) && this._matchMock(mock, req)) {
                     req.respond(mock.response);
+                    if (this.options.verbose) console.log(`Mocked request to "${req.url()}" with "${mock.mockName}"`);
                     responded = true;
                 }
             });
@@ -122,6 +140,7 @@ where disease="diabetes"`,
                 const mock = this.mocks.find((mock) => mock.name === mockName);
                 if (mock === undefined) reject(`Mock with name "${mockName}" does not exist.`);
                 if (this._matchMock(mock, resp.request())) {
+                    if (this.options.verbose) console.log(`Mock response completed to "${req.url()}" with "${mock.mockName}"`);
                     resolve(resp);
                 }
             });

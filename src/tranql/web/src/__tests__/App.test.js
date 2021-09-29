@@ -136,15 +136,14 @@ describe('App', async () => {
      *  - This would involve making the main part the test reusable, so that various different `/tranql/parse_incomplete`
      *    responses could be tested.
      *  - Also would involve adding a mock helper most likely.
-     *
      */
 
     test(
         "autocompletion works",
         async () => {
             const page = await browser.newPage();
+            await mocker.mock(page, ["reasoner_urls", "parse_incomplete_single_select", "parse_incomplete_forward_select_complete"]);
             await page.goto(WEBSITE_URL);
-            await mocker.mock(page, ["parse_incomplete_single_select", "parse_incomplete_forward_select_complete"]);
             
             async function testAutocomplete(query, cursorPos, mockName, expectedResults, resultingQuery) {
                 await page.evaluate(async (query, cursorPos) => {
@@ -156,7 +155,6 @@ describe('App', async () => {
                     cmInstance.options.extraKeys["Ctrl-Space"]();
                 }, query, cursorPos);
                 await mocker.resolveResponse(page, mockName);
-                
                 await page.waitForFunction(async () => {
                     const cmInstance = document.querySelector(".query-code > .CodeMirror").CodeMirror;
                     return cmInstance.state.completionActive !== undefined && cmInstance.state.completionActive.data.list[0].displayText !== "Loading";
@@ -202,7 +200,15 @@ where disease="asthma"`,
                     `select disease->%s
  from "redis:test"
 where disease="asthma"`,
-                ]
+                ],
+                /*[
+                    `select disease-[]->phenotypic_feature`,
+                    {line: 0, ch: 16},
+                    "parse_incomplete_predicate_completion",
+                    // Expect the predicates of all edges with source disease and target phenotypic_feature.
+                    loadedSchemaGraph.schema.knowledge.graph.edges.filter((e) => e[0] === "disease" && e[1] === "phenotypic_feature").map((e) => e[2]),
+                    "select disease-[%s]->phenotypic_feature"
+                ]*/
             ];
             for (let i=0; i<tests.length; i++) await testAutocomplete(...tests[i]);
         },
