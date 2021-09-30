@@ -796,11 +796,7 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
         }
         else {
           setLoading(true);
-          try {
           await this.schemaPromise;
-          }catch {
-            console.log("Failed schema promise");
-          }
           setLoading(false);
           const graph = this.state.schemaMessage.knowledge_graph;
 
@@ -831,12 +827,7 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
           const statementType = lastStatement[0];
 
           setLoading(true);
-          let fromOptions;
-          try {
-          fromOptions = await this.reasonerURLs;
-          }catch {
-            console.log("Failed reasoner urls");
-          }
+          const fromOptions = await this.reasonerURLs;
           setLoading(false);
 
           fromOptions["/schema"] = "/schema";
