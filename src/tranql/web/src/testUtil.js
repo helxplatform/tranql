@@ -108,7 +108,8 @@ where disease="diabetes"`,
         if (typeof specificMocks === "undefined") specificMocks = this.mocks.map((m) => m.name).filter((name) => name !== undefined);
         if (typeof specificMocks === "string") specificMocks = [specificMocks];
         specificMocks.forEach((mockName) => {
-            if (!this.mocks.map((m) => m.name).includes(mockName)) throw new Error(`Mock "${mockName}" does not exist.`);
+            const mock = this.mocks.find((m) => m.name === mockName);
+            if (mock === undefined) throw new Error(`Mock "${mockName}" does not exist.`);
         });
         await page.setRequestInterception(true);
         page.on("request", (req) => {
