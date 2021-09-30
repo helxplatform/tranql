@@ -25,7 +25,6 @@ import DefaultTooltipContent from 'recharts/lib/component/DefaultTooltipContent'
 import ReactTooltip from 'react-tooltip';
 import { NotificationContainer , NotificationManager } from 'react-notifications';
 import 'react-notifications/lib/notifications.css';
-import { Range } from 'rc-slider';
 import { GridLoader } from 'react-spinners';
 import SplitPane from 'react-split-pane';
 import Cache from './Cache.js';
@@ -37,15 +36,17 @@ import Legend from './Legend.js';
 import TableViewer from './TableViewer.js';
 import HelpModal, { ToolbarHelpModal } from './HelpModal.js';
 import ImportExportModal from './ImportExportModal.js';
+import SettingsModal from './SettingsModal.js';
 import confirmAlert from './confirmAlert.js';
 import highlightTypes from './highlightTypes.js';
 import { shadeColor, adjustTitle, hydrateState, formatBytes } from './Util.js';
-import { Toolbar, Tool, /*ToolGroup*/ } from './Toolbar.js';
+import { AppToolbar, Tool, /*ToolGroup*/ } from './Toolbar.js';
 import LinkExaminer from './LinkExaminer.js';
 // import FindTool from './FindTool.js';
 import FindTool2 from './FindTool2.js';
 import Message from './Message.js';
 import Chain from './Chain.js';
+import autoComplete from './autocomplete.js';
 import ContextMenu from './ContextMenu.js';
 import GraphSerializer from './GraphSerializer.js';
 import { RenderInit, RenderSchemaInit, IdFilter, LegendFilter, LinkFilter, NodeFilter, ReasonerFilter, SourceDatabaseFilter, CurvatureAdjuster } from './Render.js';
@@ -100,7 +101,7 @@ class App extends Component {
     this._getModelConcepts = this._getModelConcepts.bind (this);
     this._getModelRelations = this._getModelRelations.bind (this);
     this._getReasonerURLs = this._getReasonerURLs.bind (this);
-    this._codeAutoComplete = this._codeAutoComplete.bind(this);
+    this._codeAutoComplete = autoComplete.bind(this);
     this._updateCode = this._updateCode.bind (this);
     this._executeQuery = this._executeQuery.bind(this);
     this._abortQuery = this._abortQuery.bind(this);
@@ -110,9 +111,6 @@ class App extends Component {
     // Toolbar
     this._setNavMode = this._setNavMode.bind(this);
     this._setSelectMode = this._setSelectMode.bind(this);
-
-    this._getTools = this._getTools.bind(this);
-    this._getButtons = this._getButtons.bind(this);
 
     this._setHighlightTypesMode = this._setHighlightTypesMode.bind(this);
     this._highlightType = this._highlightType.bind(this);
@@ -168,7 +166,6 @@ class App extends Component {
     // Settings management
     this._handleUpdateSettings = this._handleUpdateSettings.bind (this);
     this._toggleCheckbox = this._toggleCheckbox.bind (this);
-    this._renderCheckboxes = this._renderCheckboxes.bind (this);
     this._hydrateState = hydrateState.bind (this);
     this._handleQueryString = this._handleQueryString.bind (this);
 
@@ -376,114 +373,7 @@ class App extends Component {
 
       activeModal : null,
 
-      exampleQueries : [
-          {
-            title: 'Protein-Metabolite Interaction',
-            query:
-`-- What proteins are targetted by the metabolite KEGG:C00017?
-
-set metabolite = "KEGG:C00017"
-
-select metabolite->protein
-  from "/graph/rtx"
- where metabolite=$metabolite
-
-`
-        },
-        {
-          title: 'Chemical substances target genes that target asthma',
-          query:
-`-- Which chemical substances target genes that target asthma?
-select chemical_substance->gene->disease
-  from "/graph/gamma/quick"
- where disease="asthma"
-`
-        },
-        {
-          title: 'Usage of predicates to narrow results',
-          query:
-`-- Which chemical substances decrease activity of genes that contribute to asthma?
-select chemical_substance-[decreases_activity_of]->gene-[contributes_to]->disease
-  from "/graph/gamma/quick"
- where disease="asthma"
-`
-        },
-        {
-          title: 'Phenotypic Feature-Disease Association',
-          query:
-`-- What diseases are associated with the phenotypic feature HP:0005978?
-
-select phenotypic_feature->disease
-	from "/graph/rtx"
- where phenotypic_feature="HP:0005978"
-`
-        },
-        {
-          title: 'Drug-Disease Pair',
-          query:
-`--
--- Produce clinial outcome pathways for this drug disease pair.
---
-
-set drug = 'PUBCHEM:2083'
-set disease = 'MONDO:0004979'
-
-select chemical_substance->gene->anatomical_entity->phenotypic_feature<-disease
-  from '/graph/gamma/quick'
- where chemical_substance = $drug
-   and disease = $disease`
-        },
-        {
-          title: 'Drug Targets Gene',
-          query:
-`--
--- What drug targets some gene?
---
-
-set target_gene = 'HGNC:6871' --mapk1
-select chemical_substance->gene
-  from '/graph/gamma/quick'
- where gene = $target_gene`
-        },
-        {
-          title: 'Tissue-Disease Association',
-          query:
-`--
--- What tissue types are associated with [disease]?
---
-set disease = 'asthma'
-select disease->anatomical_feature->cell
-  from '/graph/gamma/quick'
- where disease = $disease
-`
-        },
-        {
-          title: 'Workflow 5 v3',
-          query:
-`--
--- Workflow 5
---
---   Modules 1-4: Chemical Exposures by Clinical Clusters
---      For ICEES cohorts, eg, defined by differential population
---      density, which chemicals are associated with these
---      cohorts with a p_value lower than some threshold?
---
---   Modules 5-*: Knowledge Graph Phenotypic Associations
---      For chemicals produced by steps 1-4, what phenotypes are
---      associated with exposure to these chemicals?
---
-
-SELECT population_of_individual_organisms->chemical_substance->gene->biological_process_or_activity<-phenotypic_feature
-  FROM "/schema"
- WHERE icees.table = 'patient'
-   AND icees.year = 2010
-   AND icees.cohort_features.AgeStudyStart = '0-2'
-   AND icees.feature.EstResidentialDensity < 1
-   AND icees.maximum_p_value = 1
-   AND chemical_substance !=~ '^(SCTID.*|rxcui.*|CAS.*|SMILES.*|umlscui.*)$'
-   AND icees.regex = "(MONDO|HP):.*""`
-        }
-      ]
+      exampleQueries : require("./static/app_data/example_queries.js")
 
       //showAnswerViewer : true
     };
@@ -620,549 +510,7 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
       code: newCode
     });
   }
-  /**
-   * Callback for handling autocompletion within the query editor.
-   *
-   * @param {object} cm - The CodeMirror object.
-   * @private
-   */
-  _codeAutoComplete () {
-    // https://github.com/JedWatson/react-codemirror/issues/52
-    var codeMirror = this._codemirror;
-
-    // hint options for specific plugin & general show-hint
-    // 'tables' is sql-hint specific
-    // 'disableKeywords' is also sql-hint specific, and undocumented but referenced in sql-hint plugin
-    // Other general hint config, like 'completeSingle' and 'completeOnSingleClick'
-    // should be specified here and will be honored
-
-    // Shallow copy it.
-    const pos = Object.assign({}, codeMirror.getCursor());
-    const untrimmedPos = codeMirror.getCursor();
-    const textToCursorPositionUntrimmed = codeMirror.getRange({ line : 0, ch : 0 }, { line : pos.line, ch : pos.ch });
-    const textToCursorPosition = textToCursorPositionUntrimmed.trimRight();
-    const entireText = codeMirror.getValue();
-
-    // const splitLines = textToCursorPosition.split(/\r\n|\r|\n/);
-    // // Adjust the position after trimming to be on the correct line.
-    // pos.line = splitLines.length - 1;
-    // // Adjust the position after trimming to be on the correct char.
-    // pos.ch = splitLines[splitLines.length-1].length;
-
-    const setHint = function(options, noResultsTip) {
-      if (typeof noResultsTip === 'undefined') noResultsTip = true;
-      if (noResultsTip && options.length === 0) {
-        options.push({
-          text: String(''),
-          displayText:'No valid results'
-        });
-      }
-      const hintOptions = {
-        // tables: tables,
-        hint: function() {
-          return {
-            from: pos,
-            to: untrimmedPos,
-            list: options.map((option) => {
-              // Process custom options - `replaceText`
-              if (option.hasOwnProperty('replaceText')) {
-                let replaceText = option.replaceText;
-                let from = option.hasOwnProperty('from') ? option.from : pos;
-                let to = option.hasOwnProperty('to') ? option.to : untrimmedPos;
-
-                option.from = { line : from.line, ch : from.ch - replaceText.length };
-                option.to = { line : to.line, ch : to.ch};
-
-                if (replaceText.length > 0) {
-                  const trimmedLines = textToCursorPositionUntrimmed.trimRight().split(/\r\n|\r|\n/);
-                  const lastLine = trimmedLines[trimmedLines.length-1];
-                  option.from.line = trimmedLines.length - 1;
-                  option.from.ch = lastLine.length - replaceText.length;
-                }
-
-
-                delete option.replaceText;
-              }
-
-              return option;
-            })
-          };
-        },
-        disableKeywords: true,
-        completeSingle: false,
-        completeOnSingleClick: false
-      };
-
-      codeMirror.showHint(hintOptions);
-      // codeMirror.state.completionActive.pick = () => {
-      //   codeMirror.showHint({
-      //     hint: function() {
-      //       return {
-      //         from: pos,
-      //         to: pos,
-      //         list: [{
-      //           text: String(''),
-      //           displayText: 'foobar',
-      //           className: 'testing'
-      //         }]
-      //       };
-      //     },
-      //     disableKeywords: true,
-      //     completeSingle: false,
-      //   });
-      // }
-    }
-
-    const setError = (resultText, status, errors, resultOptions) => {
-      if (typeof resultOptions === "undefined") resultOptions = {};
-      codeMirror.showHint({
-        hint: function() {
-          return {
-            from: pos,
-            to: pos,
-            list: [{
-              text: String(''),
-              displayText: resultText,
-              className: 'autocomplete-result-error',
-              ...resultOptions,
-            }]
-          };
-        },
-        disableKeywords: true,
-        completeSingle: false,
-      });
-      if (typeof status !== "undefined" && typeof errors !== "undefined") {
-        codeMirror.state.completionActive.pick = () => {
-          this._handleMessageDialog (status, errors);
-        }
-      }
-    }
-
-    const setLoading = function(loading) {
-      if (loading) {
-        // text property has to be String('') because when it is '' (falsey) it refuses to display it.
-        codeMirror.showHint({
-          hint: function() {
-            return {
-              from: pos,
-              to: pos,
-              list: [{
-                text: String(''),
-                displayText: 'Loading',
-                className: 'loading-animation'
-              }]
-            };
-          },
-          disableKeywords: true,
-          completeSingle: false,
-        });
-      }
-      else {
-        codeMirror.closeHint();
-      }
-    }
-
-    /**
-     * TODO:
-     * could try to see if its possible to have two select menus for predicates that also show concepts from the predicates
-     *    would look something like this image, when, for example, you pressed the right arrow or left clicked or something on a predicate:
-     *        https://i.imgur.com/LBsdrcq.png
-     * could somehow see if there's a way to have predicate suggestion work properly when there's a concept already following the predicate
-     *    Ex: 'select foo-[what_can_I_put_here?]->baz'
-     *    Would involve sending more of the query instead of cutting it off at cursor.
-     *    Then would somehow have to backtrack and locate which token the cursor's position translates to.
-     */
-
-    this._autoCompleteController.abort();
-    this._autoCompleteController = new window.AbortController();
-
-    setLoading(true);
-
-    fetch(this.tranqlURL + '/tranql/parse_incomplete', {
-      signal: this._autoCompleteController.signal,
-      method: "POST",
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify([textToCursorPositionUntrimmed, entireText])
-    }).then(res => res.json())
-      .then(async (parsedTree) => {
-        setLoading(false)
-
-        if (parsedTree.errors) {
-          // this._handleMessageDialog (parsedTree.status, parsedTree.errors);
-          setError("Failed to parse", parsedTree.status, parsedTree.errors);
-        }
-        else {
-          setLoading(true);
-          await this.schemaPromise;
-          setLoading(false);
-          const graph = this.state.schemaMessage.knowledge_graph;
-
-          // Recursviely removes any tokens that are linebreaks from a parsed tree.
-          const stripLinebreaks = function(tree) {
-            if (Array.isArray(tree)) {
-              return tree.filter((token) => stripLinebreaks(token));
-            }
-            else {
-              return tree.toString().match(/\r\n|\r|\n/) === null;
-            }
-          }
-
-          const incompleteTree = parsedTree[0];
-          const completeTree = parsedTree[1];
-
-          // Filter whitespace from the statements
-          const block = incompleteTree[incompleteTree.length-1].map((statement) => {
-            return stripLinebreaks(statement);
-          });
-          const completeBlock = completeTree[completeTree.length-1].map((statement) => {
-            return stripLinebreaks(statement);
-          });
-
-          const lastStatement = block[block.length-1];
-          const lastStatementComplete = completeBlock[block.length-1];
-
-          const statementType = lastStatement[0];
-
-          setLoading(true);
-          const fromOptions = await this.reasonerURLs;
-          setLoading(false);
-
-          fromOptions["/schema"] = "/schema";
-
-          const whereOptions = [
-            'testing',
-            'foobar'
-          ];
-
-          const concept_arrows = [
-            '->',
-            '<-'
-          ];
-
-          const all_arrows = [
-            '->',
-            '<-',
-            '-[',
-            '<-['
-          ];
-
-          const arrow_to_pred_arrow = (arrow) => {
-            return {
-              '->' : [
-                '-[',
-                '',
-                ']->'
-              ],
-              '<-' : [
-                '<-[',
-                '',
-                ']-'
-              ]
-            }[arrow];
-          }
-
-          const arrowToEmptyPredicate = (arrow) => {
-            return arrow_to_pred_arrow(arrow);
-          }
-
-          const isBackwardsPredicate = (predicate) => {
-            return predicate[0] === '<-[';
-          }
-
-          const toForwardPredicate = (predicate) => {
-            predicate[0] = '-[';
-            predicate[2] = ']->';
-            return predicate;
-          }
-
-          const completePredicate = (predicate) => {
-            if (isBackwardsPredicate (predicate)) {
-              predicate[2] = arrow_to_pred_arrow("<-")[2];
-            }
-            else {
-              predicate[2] = arrow_to_pred_arrow("->")[2];
-            }
-            return predicate;
-          }
-
-          const concept = (old_concept) => {
-            // Concept identifiers aren't actually parsed by the lexer, but rather the ast in Query::add.
-            // This just copies the methods that the ast uses to parse concept identifiers.
-            if (old_concept.indexOf(":") !== -1) {
-              const split = old_concept.split(":");
-              if (split.length - 1 > 1) {
-                throw new Error(`Invalid concept identifier "${old_concept}"`);
-              }
-              const [name, type_name] = split;
-              return type_name;
-            }
-            else {
-              return old_concept;
-            }
-          }
-
-          const lastToken = lastStatement[lastStatement.length-1];
-          const secondLastToken = lastStatement[lastStatement.length-2];
-          const thirdLastToken = lastStatement[lastStatement.length-3];
-
-          console.log(statementType, lastStatement, lastToken);
-
-          // Try/catch the entirety of the logic
-          try {
-          if (statementType === 'select') {
-            let validConcepts;
-            if (lastToken === "-") {
-              // Arrow suggestion
-              // "select foo-"
-              validConcepts = all_arrows.map((arrow) => {
-                return {
-                  displayText: arrow,
-                  text: arrow,
-                  replaceText: "-"
-                };
-              });
-            }
-            else if (Array.isArray(lastToken) && lastToken.length < 3) {
-              // If the last token is an array and not length 3 then it is an incomplete predicate.
-              // "select foo-[" or "select foo-[bar"
-              let currentPredicate = completePredicate([
-                lastToken[0],
-                lastToken[1] !== undefined ? lastToken[1] : ""
-              ]);
-              let previousConcept = concept(secondLastToken);
-              // May be undefined if there is no next concept
-              let has_no_next_concept = (lastStatementComplete.length - lastStatement.length) == 0;
-              let nextConcept = has_no_next_concept? undefined : concept(lastStatementComplete[lastStatement.length]) ;
-              // See https://github.com/frostyfan109/tranql/issues/117 for why this approach doesn't work
-
-
-
-              const backwards = isBackwardsPredicate (currentPredicate);
-
-              console.log ([previousConcept, currentPredicate, nextConcept]);
-
-              // Should replace this method with reduce
-
-              const allEdges = graph.edges.filter((edge) => {
-                if (backwards) {
-                  return edge.target_id === previousConcept &&
-                  (nextConcept === undefined || edge.source_id === nextConcept) &&
-                  edge.type.startsWith(currentPredicate[1]);
-                }
-                else {
-                  return (
-                    edge.source_id === previousConcept &&
-                    (nextConcept === undefined || edge.target_id === nextConcept) &&
-                    edge.type.startsWith(currentPredicate[1])
-                  );
-                }
-              });
-              const uniqueEdgeMap = {};
-              allEdges.forEach((edge) => {
-                if (!uniqueEdgeMap.hasOwnProperty(edge.type)) {
-                  uniqueEdgeMap[edge.type] = edge;
-                }
-              });
-              const uniqueEdges = Object.values(uniqueEdgeMap);
-              validConcepts = uniqueEdges.map((edge) => {
-                const replaceText = currentPredicate[1];
-                // const actualText = type + currentPredicate[2];
-                const conceptHint = " (" + (backwards ? edge.source_id : edge.target_id) + ")";
-                const actualText = edge.type;
-                const displayText = edge.type + conceptHint;
-                return {
-                  displayText: displayText,
-                  text: actualText,
-                  replaceText : replaceText
-                };
-              });
-            }
-            else {
-              // Otherwise, we are handling autocompletion of a concept.
-              let currentConcept = "";
-              let predicate = null;
-              let previousConcept = null;
-
-              if (lastToken === statementType) {
-                // "select"
-              }
-              else if (secondLastToken === statementType) {
-                // "select foo"
-                currentConcept = concept(lastToken);
-              }
-              else if (concept_arrows.includes(lastToken) || Array.isArray(lastToken)) {
-                // "select foo->" or "select foo-[bar]->"
-                predicate = lastToken;
-                previousConcept = concept(secondLastToken);
-              }
-              else {
-                previousConcept = concept(thirdLastToken);
-                predicate = secondLastToken;
-                currentConcept = concept(lastToken);
-              }
-
-
-              if (predicate === null) {
-                // Predicate will only be null if there are no arrows, and therefore the previousConcept is also null.
-                // Single concept - just "select" or "select foo" where the concept is either "" or "foo"
-                validConcepts = graph.nodes.filter((node) => node.type.startsWith(currentConcept)).map(node => node.type);
-              }
-              else {
-                // If there is a predicate, we have to factor in the previous concept, the predicate, and the current concept.
-                if (!Array.isArray(predicate)) {
-                  // We want to assign an empty predicate
-                  predicate = arrowToEmptyPredicate (predicate);
-                }
-
-                const backwards = isBackwardsPredicate (predicate);
-
-                console.log ([previousConcept, predicate, currentConcept]);
-                // Concepts could be named like select f1:foo->f2:bar
-                // we need to split them and grab the actual types
-                let previousConceptSplit = previousConcept.split(':');
-                let currentConceptSplit = currentConcept.split(':');
-                previousConcept = previousConceptSplit[previousConceptSplit.length - 1];
-                currentConcept = currentConceptSplit[currentConceptSplit.length - 1];
-                validConcepts = graph.edges.filter((edge) => {
-                  if (backwards) {
-                    return (
-                      edge.source_id.startsWith(currentConcept) &&
-                      edge.target_id === previousConcept &&
-                      (predicate[1] === "" || edge.type === predicate[1])
-                    );
-                  }
-                  else {
-                    return (
-                      edge.source_id === previousConcept &&
-                      edge.target_id.startsWith(currentConcept) &&
-                      (predicate[1] === "" || edge.type === predicate[1])
-                    );
-                  }
-                }).map((edge) => {
-                  if (backwards) {
-                    return edge.source_id;
-                  }
-                  else {
-                    return edge.target_id
-                  }
-                })
-              }
-              validConcepts = validConcepts.unique().map((concept) => {
-                return {
-                  displayText: concept,
-                  text: concept,
-                  replaceText: currentConcept
-                };
-              });
-            }
-            setHint(validConcepts);
-
-          }
-          else if (statementType === 'from') {
-            let currentReasonerArray = lastStatement[1];
-            let startingQuote = "";
-            if (currentReasonerArray === undefined) {
-              // Adds an apostrophe to the start of the string if it doesn't have one ("from")
-              startingQuote = "'";
-              currentReasonerArray = [[
-                "'",
-                ""
-              ]];
-            }
-            const endingQuote = currentReasonerArray[currentReasonerArray.length - 1][0];
-            const currentReasoner = currentReasonerArray[currentReasonerArray.length - 1][1];
-            // The select statement must be the first statement in the block, but thorough just in case.
-            // We also want to filter out whitespace that would be detected as a token.
-            const selectStatement = block.filter((statement) => statement[0] === "select")[0].filter((token) => {
-              return typeof token !== "string" || token.match(/\s/) === null;
-            });
-            // Don't want the first token ("select")
-            const tokens = selectStatement.slice(1);
-
-            let validReasoners = [];
-
-            Object.keys(fromOptions).forEach((reasoner) => {
-              let valid = true;
-              if (tokens.length === 1) {
-                // Handles if there's only one concept ("select foo")
-                const currentConcept = concept(tokens[0]);
-                graph.nodes.filter((node) => node.type.startsWith(currentConcept)).forEach(node => node.reasoner.forEach((reasoner) => {
-                  !validReasoners.includes(reasoner) && validReasoners.push(reasoner);
-                }));
-              }
-              else {
-                for (let i=0;i<tokens.length-2;i+=2) {
-                  const previousConcept = concept(tokens[i]);
-                  let predicate = tokens[i+1];
-                  const currentConcept = concept(tokens[i+2]);
-
-                  if (!Array.isArray(predicate)) {
-                    predicate = arrowToEmptyPredicate (predicate);
-                  }
-                  const backwards = isBackwardsPredicate (predicate);
-
-                  const isTransitionValid = graph.edges.filter((edge) => {
-                    if (backwards) {
-                      return (
-                        edge.source_id.startsWith(currentConcept) &&
-                        edge.target_id === previousConcept &&
-                        (predicate[1] === "" || edge.type === predicate[1]) &&
-                        (reasoner === "/schema" || edge.reasoner.includes(reasoner))
-                      );
-                    }
-                    else {
-                      return (
-                        edge.source_id === previousConcept &&
-                        edge.target_id.startsWith(currentConcept) &&
-                        (predicate[1] === "" || edge.type === predicate[1]) &&
-                        (reasoner === "/schema" || edge.reasoner.includes(reasoner))
-                      );
-                    }
-                  }).length > 0;
-                  if (!isTransitionValid) {
-                    valid = false;
-                    break;
-                  }
-                }
-                if (valid) {
-                  validReasoners.push(reasoner);
-                }
-              }
-            });
-
-            const validReasonerValues = validReasoners.map((reasoner) => {
-              return fromOptions[reasoner];
-            }).filter((reasonerValue) => {
-              return reasonerValue.startsWith(currentReasoner);
-            }).map((reasonerValue) => {
-              return {
-                displayText: reasonerValue,
-                text: startingQuote + reasonerValue,
-                // text: startingQuote + reasonerValue + endingQuote,
-                replaceText: currentReasoner
-              };
-            });
-
-            setHint(validReasonerValues);
-          }
-          else if (statementType === 'where') {
-
-          }
-          }
-          catch (e) {
-            setError('Failed to parse', 'Failed to parse', [{message: e.message, details: e.stack}]);
-          }
-        }
-      })
-      .catch((error) => {
-        if (error.name !== "AbortError") {
-          setError('Error', 'Error', [{message: error.message, details: error.stack}]);
-        }
-      });
-  }
+  
   /**
    * Sets the active force graph
    *
@@ -2098,33 +1446,6 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
         this._translateGraph(newMessage,false,false);
       });
     }
-
-    // If the selected node/link is hidden we want to deselect it.
-    // this.setState({},() => {
-    //   if (this.state.selectedNode !== null) {
-    //     if (this.state.selectedNode.hasOwnProperty('node') && newMessage.graph.nodes.filter((node) => node.id === this.state.selectedNode.node.id).length === 0) {
-    //       delete this.state.selectedNode.node;
-    //       this._updateDimensions();
-    //     }
-    //     if (
-    //       this.state.selectedNode.hasOwnProperty('link') &&
-    //       (
-    //         newMessage.graph.nodes.filter((node) => (
-    //           node.id === this.state.selectedNode.link.source_id ||
-    //           node.id === this.state.selectedNode.link.target_id
-    //         )).length < 2 ||
-    //         newMessage.graph.links.filter((link) => (
-    //           link.origin.source_id === this.state.selectedNode.link.source_id &&
-    //           link.origin.target_id === this.state.selectedNode.link.target_id &&
-    //           JSON.stringify(link.origin.type) === JSON.stringify(this.state.selectedNode.link.type)
-    //         )).length === 0
-    //       )
-    //     ) {
-    //       delete this.state.selectedNode.link;
-    //       this._updateDimensions();
-    //     }
-    //   }
-    // })
   }
   /**
    * Handle a click on a graph node.
@@ -2271,77 +1592,6 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
   _renderForceGraphVR (data, props) {
       return <ForceGraphVR {...props} />
   }
-  /**
-  * Render the toolbar buttons
-  *
-  * @private
-  */
-  _getButtons() {
-    return (
-      <>
-      <FaPlayCircle data-tip="Answer Navigator - see each answer, its graph structure, links, knowledge source and literature provenance"
-                       id="answerViewerToolbar"
-                       className="App-control-toolbar fa"
-                       onClick={this._handleShowAnswerViewer} />
-      <FaSearch data-tip="Find tool - helps to quickly locate specific things in the graph" id="findTool" className="App-control-toolbar fa" onClick={() => this._findTool.current.toggleShow()}/>
-      <FaQuestionCircle data-tip="Help & Information" id="helpButton" className="App-control-toolbar fa" onClick={() => this._setActiveModal('HelpModal')}/>
-      <FaDatabase data-tip="Cache Viewer - search through previous queries" id="cachedQueriesButton" className="App-control-toolbar fa" onClick={() => this._setActiveModal('CachedQueriesModal')}/>
-      <FaFolderOpen data-tip="Import/Export - Import or export graphs" id="importExportButton" className="App-control-toolbar fa" onClick={() => this._setActiveModal('ImportExportModal')}/>
-      <FaCog data-tip="Configure application settings" id="settingsToolbar" className="App-control-toolbar fa" onClick={() => this._setActiveModal('SettingsModal')} />
-      <FaTable data-active={this.state.tableViewerComponents.tableViewerCompActive} data-tip="View a tabular representation of the active graph" id="tableViewButton" className="App-control-toolbar fa" onClick={() => {
-        this.state.tableViewerComponents.tableViewerCompActive ? this._closeTableViewer() : this._openTableViewer("tableViewerCompActive");
-      }}/>
-      {
-      // Perfectly functional but does not provide enough functionality as of now to warrant its presence
-      /*<FaBarChart data-tip="Type Bar Chart - see all the types contained within the graph distributed in a bar chart"
-                  className="App-control-toolbar fa"
-                  onClick={() => this.setState ({ showTypeChart : true })} />*/
-      // The tool works as intended but the annotator does not yet.
-      /*<FaPen className="App-control-toolbar fa" data-tip="Annotate Graph" onClick={() => this._annotateGraph ()}/>*/
-      }
-      </>
-    );
-  }
-  /**
-   * Render the toolbar tools
-   *
-   * @private
-   */
-  _getTools() {
-    return (
-      <>
-      <Tool name="Navigate" shortcut="v" description="Click a node to move the camera to it and make it the center of rotation." callback={(bool) => this._setNavMode(bool)}>
-      <FaArrowsAlt/>
-      </Tool>
-      <Tool name="Select" shortcut="g" description="Open a node or link in the object viewer" ref={this._selectToolRef} callback={(bool) => this._setSelectMode(bool)}>
-        <FaMousePointer/>
-      </Tool>
-      <Tool name="Highlight Types"
-            shortcut="h"
-            description="Highlights all elements of the type that is being hovered over.<br/> Left click filters all of that type. Right click filters all not of that type."
-            callback={(bool) => this._setHighlightTypesMode(bool)}>
-        <FaHighlighter/>
-      </Tool>
-      <Tool name="Examine Connection"
-            shortcut="f"
-            description="Displays a connection between two nodes and all links between them"
-            callback={(bool) => this._setConnectionExaminerActive(bool)}>
-        <FaEye/>
-      </Tool>
-      <Tool name="Browse node"
-            shortcut="e"
-            description="Browse new nodes connected to a node in the graph by a biolink modal type"
-            callback={(bool) => {
-              this.setState({ browseNodeActive : bool });
-              if (!bool) {
-                this._browseNodeInterface.current.hide();
-              }
-            }}>
-        <IoMdBrowsers/>
-      </Tool>
-      </>
-    );
-  }
   _handleShowAnswerViewer () {
     console.log (this._answerViewer);
     if (this.state.message) {
@@ -2463,20 +1713,6 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
     const msg = schemaActive ? this.state.schemaMessage : this.state.message;
 
     this._translateGraph(msg,false,schemaActive);
-  }
-  _renderCheckboxes(stateKey) {
-    return this.state[stateKey].map((checkbox, index) =>
-            <div key={index}>
-                <label>
-                    <input
-                        type="checkbox"
-                        checked={checkbox.checked}
-                        onChange={()=>this._toggleCheckbox(stateKey, index)}
-                    />
-                    {checkbox.label}
-                </label>
-            </div>
-        );
   }
   /**
    *
@@ -2838,164 +2074,7 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
   _renderSettingsModal () {
     return (
       <>
-        <Modal show={this.state.activeModal==="SettingsModal"}
-               onHide={() => this._setActiveModal(null)}>
-          <Modal.Header closeButton>
-            <Modal.Title>Settings</Modal.Title>
-          </Modal.Header>
-          <Modal.Body>
-            <Tabs defaultActiveKey="general" className="react-tabs-settings-tab-list">
-              <Tab eventKey="general" title="General">
-            <hr style={{visibility:"hidden",marginTop:0}}/>
-            <div style={{display:"flex",flexDirection:"column"}}>
-              <b>Visualization Mode and Graph Colorization</b>
-              <div style={{display:"flex"}}>
-                <div>
-                  <input type="radio" name="visMode"
-                         value="3D"
-                         checked={this.state.visMode === "3D"}
-                         onChange={this._handleUpdateSettings} />3D &nbsp;
-                </div>
-                <div>
-                  <input type="radio" name="visMode"
-                         value="2D"
-                         checked={this.state.visMode === "2D"}
-                         onChange={this._handleUpdateSettings} />2D &nbsp;
-                </div>
-                <div>
-                  <input type="radio" name="visMode"
-                         value="VR"
-                         checked={this.state.visMode === "VR"}
-                         onChange={this._handleUpdateSettings} />VR &nbsp;&nbsp;
-                </div>
-              <div>
-                <input type="checkbox" name="colorGraph"
-                       checked={this.state.colorGraph}
-                       onChange={this._handleUpdateSettings} /> Color the graph.
-              </div>
-              </div>
-            </div>
-
-            <hr/>
-
-            <div style={{display:"flex"}}>
-              <div style={{display:"flex",flexDirection:"column",flexGrow:1}}>
-                <b>Use Cache</b>
-                <div>
-                  <input type="checkbox" name="useCache"
-                         checked={this.state.useCache}
-                         onChange={this._handleUpdateSettings} /> Use cached responses.
-                </div>
-              </div>
-              <div style={{display:"flex",justifyContent:"center",alignItems:"center"}}>
-                <Button id="clearCache"
-                        outline className="App-control"
-                        color="primary" onClick={this._clearCache}>
-                  Clear the cache {this.state.databaseSize}
-                </Button>
-              </div>
-            </div>
-
-            {
-            /* Really *bad* feature...
-            <hr/>
-
-            <div style={{display:"flex",flexDirection:"column"}}>
-              <b>Cursor</b>
-              <div>
-                <input type="checkbox" name="useToolCursor"
-                       checked={this.state.useToolCursor}
-                       onChange={this._handleUpdateSettings} /> Use active tool as cursor.
-              </div>
-            </div>
-            */
-            }
-
-            <hr/>
-
-            <div style={{display:"flex",flexDirection:"column"}}>
-              <b>Node Drag</b>
-              <div>
-                <input type="checkbox" name="enableNodeDrag"
-                       checked={this.state.forceGraphOpts.enableNodeDrag}
-                       onChange={this._handleUpdateSettings} /> Allow node dragging in the force graph (requires refresh).
-              </div>
-            </div>
-
-            <hr/>
-
-            <div style={{display:"flex",flexDirection:"column"}}>
-              <b>Dynamic ID Resolution</b>
-              <div>
-                <input type="checkbox" name="dynamicIdResolution"
-                       checked={this.state.dynamicIdResolution}
-                       onChange={this._handleUpdateSettings} /> Enables dynamic id lookup of curies.
-              </div>
-            </div>
-              </Tab>
-              <Tab eventKey="graphStructure" title="Graph Structure">
-            <hr style={{visibility:"hidden",marginTop:0}}/>
-            <b>Link Weight Range</b> Min: [{this.state.linkWeightRange[0] / 100}] Max: [{this.state.linkWeightRange[1] / 100}]<br/>
-            Include only links with a weight in this range.
-            <Range allowCross={false} defaultValue={this.state.linkWeightRange} onChange={this._onLinkWeightRangeChange} />
-
-            <b>Node Connectivity Range</b> Min: [{this.state.nodeDegreeRange[0]}] Max: [{this.state.nodeDegreeRange[1]}] (reset on load)<br/>
-            Include only nodes with a number of connections in this range.
-            <Range allowCross={false}
-                   defaultValue={this.state.nodeDegreeRange}
-                   onChange={this._onNodeDegreeRangeChange}
-                   max={this.state.nodeDegreeMax}/>
-            <hr/>
-            <b>Force Graph Charge</b><br/>
-            Set the charge force on the active graph<br/>
-            <Form>
-              <Form.Control
-              type="number"
-              defaultValue={this.state.charge}
-              onChange={this._onChargeChange}
-              onKeyDown={(e) => {if (e.keyCode === 13) e.preventDefault();}}
-              />
-            </Form>
-            <hr/>
-
-            <b>Legend Display Limit ({this.state.schemaViewerActive && this.state.schemaViewerEnabled ? "schema" : "graph"})</b><br/>
-            <Form>
-              <Form.Label>Set the number of nodes that the legend displays:</Form.Label>
-              <Form.Control
-              type="number"
-              defaultValue={this.state.schemaViewerActive && this.state.schemaViewerEnabled ? this.state.schemaLegendRenderAmount.nodes : this.state.queryLegendRenderAmount.nodes}
-              onChange={(e) => (this._onLegendDisplayLimitChange('nodes',e))}
-              onKeyDown={(e) => {if (e.keyCode === 13) e.preventDefault();}}
-              />
-              <Form.Label>Set the number of links that the legend displays:</Form.Label>
-              <Form.Control
-              type="number"
-              defaultValue={this.state.schemaViewerActive && this.state.schemaViewerEnabled ? this.state.schemaLegendRenderAmount.links : this.state.queryLegendRenderAmount.links}
-              onChange={(e) => (this._onLegendDisplayLimitChange('links',e))}
-              onKeyDown={(e) => {if (e.keyCode === 13) e.preventDefault();}}
-              />
-            </Form>
-
-
-            {/*<div className={"divider"}/>*/}
-            <br/>
-              </Tab>
-              <Tab eventKey="knowledgeSources" title="Knowledge Sources">
-            <hr style={{visibility:"hidden",marginTop:0}}/>
-            <b>Database Sources</b><span> Filter graph edges by source database. Deselecting a database deletes all associations from that source.</span>
-            <div className="checkbox-container">{this._renderCheckboxes('dataSources')}</div>
-            <hr/>
-            <b>Reasoner Sources</b><span> Filter graph elements by source reasoner. Deselecting a reasoner deletes all associations from that source.</span>
-            <div className="checkbox-container">{this._renderCheckboxes('reasonerSources')}</div>
-              </Tab>
-            </Tabs>
-          </Modal.Body>
-          <Modal.Footer>
-            <Button variant="secondary" onClick={() => this._setActiveModal(null)}>
-              Close
-            </Button>
-          </Modal.Footer>
-        </Modal>
+        
       </>
     );
   }
@@ -3086,14 +2165,27 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
     // Render it.
     return (
       <div className="App" id="AppElement">
+        <SettingsModal active={this.state.activeModal==="SettingsModal"}
+                       onHide={() => this._setActiveModal(null)}
+                       appState={this.state}
+
+                       toggleCheckbox={this._toggleCheckbox}
+
+                       handleUpdateSettings={this._handleUpdateSettings}
+                       clearCache={this._clearCache}
+                       onLinkWeightRangeChange={this._onLinkWeightRangeChange}
+                       onNodeDegreeRangeChange={this._onNodeDegreeRangeChange}
+                       onChargeChange={this._onChargeChange}
+                       onLegendNodeLimitChange={(e) => (this._onLegendDisplayLimitChange('nodes',e))}
+                       onLegendLinkLimitChange={(e) => (this._onLegendDisplayLimitChange('links',e))}/>
         {this._renderSettingsModal () }
         {this._renderTypeChart ()}
         <HelpModal activeModal={this.state.activeModal} setActiveModal={this._setActiveModal}/>
-        <ToolbarHelpModal activeModal={this.state.activeModal}
+        {this._toolbar.current && <ToolbarHelpModal activeModal={this.state.activeModal}
                           setActiveModal={this._setActiveModal}
-                          buttons={this._getButtons()}
-                          tools={this._getTools()}
-                          />
+                          buttons={this._toolbar.current._getButtons()}
+                          tools={this._toolbar.current._getTools()}
+                          />}
         <ImportExportModal activeModal={this.state.activeModal}
                            setActiveModal={this._setActiveModal}
                            record={this.state.record}
@@ -3300,13 +2392,29 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
                     <div id="bottomContainer">
                       {
                         this.state.toolbarEnabled && (
-                          <Toolbar id="toolbar"
-                                   default={0}
-                                   overrideCursor={this.state.useToolCursor}
-                                   tools={this._getTools()}
-                                   buttons={this._getButtons()}
-                                   onlyUseShortcutsWhen={[HTMLBodyElement]}
-                                   ref={this._toolbar}/>
+                          <AppToolbar appState={this.state}
+                                      ref={this._toolbar}
+                                      // Button callbacks
+                                      answerViewerCallback={this._handleShowAnswerViewer}
+                                      findToolCallback={() => this._findTool.current.toggleShow()}
+                                      helpToolCallback={() => this._setActiveModal('HelpModal')}
+                                      cachedQueriesToolCallback={() => this._setActiveModal('CachedQueriesModal')}
+                                      importExportToolCallback={() => this._setActiveModal('ImportExportModal')}
+                                      settingsToolCallback={() => this._setActiveModal('SettingsModal')}
+                                      tableViewerToolCallback={() => {
+                                        this.state.tableViewerComponents.tableViewerCompActive ? this._closeTableViewer() : this._openTableViewer("tableViewerCompActive");
+                                      }}
+                                      // Tool callbacks
+                                      navigateToolCallback={this._setNavMode}
+                                      selectToolCallback={this._setSelectMode}
+                                      highlightTypesToolCallback={this._setHighlightTypesMode}
+                                      examineConnectionToolCallback={this._setConnectionExaminerActive}
+                                      browseNodeToolCallback={(bool) => {
+                                        this.setState({ browseNodeActive : bool });
+                                        if (!bool) {
+                                          this._browseNodeInterface.current.hide();
+                                        }
+                                      }}/>
                         )
                       }
                       <div id="graphOverlayContainer">
@@ -3360,32 +2468,6 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
                                    resultMouseLeave={(result) => {
                                      this._highlightType(result.id, false, false, undefined, "id")
                                    }}/>
-                        {/*<FindTool graph={this.state.schemaViewerActive && this.state.schemaViewerEnabled ? this.state.schema : this.state.graph}
-                                  resultMouseClick={(values)=>{
-                                    const isNode = function(element) {
-                                      return !element.origin.hasOwnProperty('source_id') && !element.origin.hasOwnProperty('target_id');
-                                    }
-                                    if (values.length > 1) {
-                                      // Grouped syntax which isn't really compatible - just use the link.
-                                      values = values.filter((element) => !isNode(element));
-                                    }
-                                    values.forEach((element) => {
-                                      if (isNode(element)) {
-                                        this._handleNodeClick(element);
-                                      }
-                                      else {
-                                        this._handleLinkClick(element, true);
-                                      }
-                                    });
-                                  }}
-                                  resultMouseEnter={(values)=>{
-                                    values.forEach((element) => this._highlightType(element.id,0xff0000,false,undefined,'id'))}
-                                  }
-                                  resultMouseLeave={(values)=>{
-                                    values.forEach((element) => this._highlightType(element.id,false,false,undefined,'id'))}
-                                  }
-                                  ref={this._findTool}/>*/}
-
                       </div>
                     </div>
                     {/*<div onContextMenu={this._handleContextMenu} id="graphContainer" data-vis-mode={this.state.visMode}>*/}
