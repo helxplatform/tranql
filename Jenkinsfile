@@ -13,7 +13,7 @@ pipeline {
                 python3 -m pip install --user --upgrade pip
                 python3 -m pip install --user -r requirements.txt
                 python3 -m pip install --user .
-                make install.npm
+                make install.npm_nobuild
                 '''
             }
         }
