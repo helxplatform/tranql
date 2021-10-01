@@ -318,5 +318,7 @@ where disease="diabetes"`;
 });
 
 afterAll(() => {
+    try {
     browser.close();
+    } catch {}
 });
