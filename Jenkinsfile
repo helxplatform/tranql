@@ -25,7 +25,7 @@ pipeline {
             }
             steps {
                 sh '''
-                make find_chromium
+                make test_puppeteer
                 make test
                 '''
             }

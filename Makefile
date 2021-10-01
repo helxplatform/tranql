@@ -53,8 +53,8 @@ test.npm:
 #test: Run all tests
 test: test.python test.npm
 
-find_chromium:
-	cd src/tranql/web; node -e "console.log(require('puppeteer').executablePath())"
+test_puppeteer:
+	cd src/tranql/web; node -e "await (require('puppeteer').launch({headless: true})"
 
 #build: Build Docker image
 build:
