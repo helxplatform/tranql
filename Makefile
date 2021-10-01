@@ -54,7 +54,7 @@ test.npm:
 test: test.python test.npm
 
 test_puppeteer:
-	cd src/tranql/web; node -e "await (require('puppeteer').launch({headless: true})"
+	cd src/tranql/web; node -e "await (require('puppeteer').launch({headless: true}))"
 
 #build: Build Docker image
 build:
