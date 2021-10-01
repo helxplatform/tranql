@@ -16,12 +16,18 @@ export const BrowserMode = Object.freeze({
     HEADFUL_SLOW: 2
 });
 
+/* Setup using environment variables */
+// If BROWSER_MODE is set, use that, else use default (DEBUG).
+const BROWSER_MODE = process.env.BROWSER_MODE ? BrowserMode[process.env.BROWSER_MODE] : BrowserMode.DEBUG
+// If MOCKING is set ("true or "false"), convert it from string to bool, else use default (true).
+const MOCKING = process.env.MOCKING ? (process.env.MOCKING === "true") : true;
+
 // Initialize testing arguments for tesss
 global.args = {
     // Should tests intercept API calls with mock requests (i.e. schema/graph queries)
-    mocking: true,
+    mocking: MOCKING,
     // Configures whether the Chromium instance will run headless or not
-    browserMode: BrowserMode.DEBUG
+    browserMode: BROWSER_MODE
 };
 
 jest.setTimeout(60000);

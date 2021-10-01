@@ -45,7 +45,7 @@ test.python:
 
 #test.npm: Run all NPM tests
 test.npm:
-	cd src/tranql/web; npm test
+	cd src/tranql/web; npm test -- --watchAll=false
 
 #test: Run all tests
 test: test.python test.npm

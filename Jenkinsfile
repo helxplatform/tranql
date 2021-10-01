@@ -18,6 +18,11 @@ pipeline {
             }
         }
         stage('Test') {
+            environment {
+                export MOCKING=true
+                export BROWSER_MODE=HEADLESS
+                export CI=true
+            }
             steps {
                 sh '''
                 make test
