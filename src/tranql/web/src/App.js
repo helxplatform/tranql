@@ -33,7 +33,7 @@ import QueriesModal from './QueriesModal.js';
 import HistoryViewer from './HistoryViewer.js';
 import BrowseNodeInterface from './BrowseNodeInterface.js';
 import Legend from './Legend.js';
-import TableViewer from './TableViewer.js';
+import { AppTableViewer } from './TableViewer.js';
 import HelpModal, { ToolbarHelpModal } from './HelpModal.js';
 import ImportExportModal from './ImportExportModal.js';
 import SettingsModal from './SettingsModal.js';
@@ -2067,18 +2067,6 @@ class App extends Component {
     );
   }
   /**
-   * Render the modal settings dialog.
-   *
-   * @private
-   */
-  _renderSettingsModal () {
-    return (
-      <>
-        
-      </>
-    );
-  }
-  /**
    * Sets the active modal
    *
    * @param {string|null} modalName - Sets activeModal to modalName, if null no modal is active.
@@ -2178,7 +2166,6 @@ class App extends Component {
                        onChargeChange={this._onChargeChange}
                        onLegendNodeLimitChange={(e) => (this._onLegendDisplayLimitChange('nodes',e))}
                        onLegendLinkLimitChange={(e) => (this._onLegendDisplayLimitChange('links',e))}/>
-        {this._renderSettingsModal () }
         {this._renderTypeChart ()}
         <HelpModal activeModal={this.state.activeModal} setActiveModal={this._setActiveModal}/>
         {this._toolbar.current && <ToolbarHelpModal activeModal={this.state.activeModal}
@@ -2513,57 +2500,18 @@ class App extends Component {
               }
             </div>
             <div className="h-100">
-            <TableViewer tableView={this.state.tableViewerComponents.tableViewerCompActive}
-                         close={this._closeTableViewer}
-                         ref={this._tableViewer}
-                         data={(() => {
-                           const graph = this.state.schemaViewerActive && this.state.schemaViewerEnabled ? this.state.schema : this.state.graph;
-                           // Table viewer generates a tab for every property in the object provided, but we only want nodes and links as our tabs.
-                           return {
-                             nodes : graph.nodes.map((node) => node.origin),
-                             links : graph.links.map((link) => link.origin)
-                           };
-                         })()}
-                         defaultTableAttributes={{
-                           "nodes" : [
-                             "name",
-                             "id",
-                             "type"
-                           ],
-                           "links" : [
-                             "source_id",
-                             "target_id",
-                             "type",
-                             "source_database"
-                           ]
-                         }}
-                         tableProps={{
-                           getTdProps: (tableState, rowInfo, columnInfo, tableInstance) => {
-                             const get_element = () => {
-                               const is_node = this._tableViewer.current._tabs.current.props.activeKey === "0";
-                               const graph = this.state.schemaViewerActive && this.state.schemaViewerEnabled ? this.state.schema : this.state.graph;
-                               const elements = is_node ? graph.nodes : graph.links;
-                               const origin = rowInfo.original;
-
-                               const element = elements.filter((element) => element.origin.id === origin.id)[0];
-
-                               const click_method = (is_node ? () => {
-                                 this._handleNodeClick(element);
-                               } : () => {
-                                 this._handleLinkClick(element, true);
-                               });
-
-                               return {
-                                 click : click_method
-                               };
-                             }
-                             return {
-                               onClick: () => {
-                                 get_element().click();
-                               }
-                             };
-                           }
-                         }}/>
+            <AppTableViewer tableViewerComponents={this.state.tableViewerComponents}
+                            closeTableViewer={this._closeTableViewer}
+                            innerRef={this._tableViewer}
+                            appState={{
+                              schemaViewerActive: this.state.schemaViewerActive,
+                              schemaViewerEnabled: this.state.schemaViewerEnabled,
+                              schema: this.state.schema,
+                              graph: this.state.graph
+                            }}
+                            tableViewer={this._tableViewer}
+                            handleNodeClick={this._handleNodeClick}
+                            handleLinkClick={this._handleLinkClick}/>
             </div>
           </SplitPane>
         </div>
