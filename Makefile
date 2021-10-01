@@ -35,6 +35,9 @@ install.python:
 install.npm:
 	cd src/tranql/web; npm install; npm run build
 
+install.npm-no-build:
+	cd src/tranql/web; npm install;
+
 #install: Install application
 install: install.python install.npm
 
