@@ -28,7 +28,7 @@ let loadedSchemaGraph;
 
 beforeAll(async () => {
     browser = await puppeteer.launch({
-        headless: args.browserMode === BrowserMode.HEADLESS,
+        headless: true,
         // Intercepting requests causing CORS issues so this needs to be disabled.
         args: [
             "--disable-web-security"
@@ -318,7 +318,5 @@ where disease="diabetes"`;
 });
 
 afterAll(() => {
-    try {
     browser.close();
-    } catch {}
 });
