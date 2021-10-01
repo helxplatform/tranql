@@ -25,7 +25,7 @@ pipeline {
             }
             steps {
                 sh '''
-                ldd chrome | grep not
+                make find_chromium
                 make test
                 '''
             }
