@@ -25,8 +25,8 @@ pipeline {
             }
             steps {
                 sh '''
-                make test
                 ldd chrome | grep not
+                make test
                 '''
             }
         }
