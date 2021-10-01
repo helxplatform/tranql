@@ -20,7 +20,7 @@ pipeline {
         stage('Test') {
             environment {
                 MOCKING=true
-                BROWSER_MODE=HEADLESS
+                BROWSER_MODE = "HEADLESS"
                 CI=true
             }
             steps {
