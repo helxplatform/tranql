@@ -317,6 +317,6 @@ where disease="diabetes"`;
     );
 });
 
-afterAll(() => {
-    browser.close();
+afterAll(async () => {
+    await browser.close();
 });
