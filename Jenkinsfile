@@ -44,6 +44,7 @@ pipeline {
             steps {
                 container('agent-docker') {
                     sh '''
+                    make test_puppeteer
                     make test
                     '''
                 }
