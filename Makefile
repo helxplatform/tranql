@@ -53,9 +53,6 @@ test.npm:
 #test: Run all tests
 test: test.python test.npm
 
-test_puppeteer:
-	cd src/tranql/web; node -e "void async function() { await (require('puppeteer').launch({headless: true})); }()"
-
 #build: Build Docker image
 build:
 	echo "Building docker image: ${DOCKER_IMAGE}"
@@ -77,4 +74,7 @@ download:
 #run.local: seeds redis with data, builds web page and runs tranql docker container
 run.local: download
 	docker-compose up -d
+	run.web
+
+run.web:
 	cd src/tranql/web; npm start;

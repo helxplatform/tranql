@@ -45,7 +45,8 @@ pipeline {
             steps {
                 container('agent-docker') {
                     sh '''
-                    make test_puppeteer
+                    make run.web
+                    wget --retry-connrefused --tries=120 --waitretry=1 -q http://localhost:3000 -O /dev/null
                     make test
                     '''
                 }
