@@ -74,7 +74,7 @@ download:
 #run.local: seeds redis with data, builds web page and runs tranql docker container
 run.local: download
 	docker-compose up -d
-	run.web
+	cd src/tranql/web; npm start;
 
 run.web:
 	cd src/tranql/web; npm start;
