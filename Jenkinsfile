@@ -39,6 +39,7 @@ pipeline {
             environment {
                 MOCKING=true
                 BROWSER_MODE = "HEADLESS"
+                SANDBOX=false
                 CI=true
             }
             steps {

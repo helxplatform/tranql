@@ -19,15 +19,20 @@ export const BrowserMode = Object.freeze({
 /* Setup using environment variables */
 // If BROWSER_MODE is set, use that, else use default (DEBUG).
 const BROWSER_MODE = process.env.BROWSER_MODE ? BrowserMode[process.env.BROWSER_MODE] : BrowserMode.DEBUG
-// If MOCKING is set ("true or "false"), convert it from string to bool, else use default (true).
+// If MOCKING is set ("true" or "false"), convert it from string to bool, else use default (true).
 const MOCKING = process.env.MOCKING ? (process.env.MOCKING === "true") : true;
+// If SANDBOX is set ("true" or "false"), convert it from string to bool, else use default (true).
+// Be aware that this option should be left true unless it's necessary for it to be disabled.
+// When disabled, it will disable Chromium sandboxing which exposes security vulnerabilities.
+const SANDBOX = process.env.SANDBOX ? (process.env.SANDBOX === "true") : true;
 
 // Initialize testing arguments for tesss
 global.args = {
     // Should tests intercept API calls with mock requests (i.e. schema/graph queries)
     mocking: MOCKING,
     // Configures whether the Chromium instance will run headless or not
-    browserMode: BROWSER_MODE
+    browserMode: BROWSER_MODE,
+    sandbox: SANDBOX
 };
 
 jest.setTimeout(60000);

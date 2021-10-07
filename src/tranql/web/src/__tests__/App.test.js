@@ -32,7 +32,8 @@ beforeAll(async () => {
         headless: args.browserMode === BrowserMode.HEADLESS,
         // Intercepting requests causing CORS issues so this needs to be disabled.
         args: [
-            "--disable-web-security"
+            "--disable-web-security",
+            args.sandbox === false ? "--no-sandbox" : ""
         ]
     });
 });
