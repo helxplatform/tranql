@@ -49,7 +49,7 @@ pipeline {
                     // Run Puppeteer and Python tests once React app is ready to be used.
                     sh '''
                     make run.web &
-                    curl -X GET --retry-connrefused --retry 120 --retry-delay 1 http://localhost:3000 &> /dev/null
+                    curl -X GET --retry-connrefused --retry 120 --retry-delay 1 http://localhost:3000
                     make test
                     '''
                 }
