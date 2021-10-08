@@ -44,9 +44,12 @@ pipeline {
             }
             steps {
                 container('agent-docker') {
+                    // Run the webserver in the background.
+                    // Use curl to wait until the webserver is serving localhost:3000 and redirect stout and stderr to null device.
+                    // Run Puppeteer and Python tests once React app is ready to be used.
                     sh '''
                     make run.web &
-                    wget --retry-connrefused --tries=120 --waitretry=1 -q http://localhost:3000 -O /dev/null
+                    curl -X GET --retry-connrefused --retry 120 --retry-delay 1 http://localhost:3000 &> /dev/null
                     make test
                     '''
                 }
