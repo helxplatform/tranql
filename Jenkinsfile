@@ -52,7 +52,7 @@ pipeline {
                     make run.web &
                     wget --retry-connrefused --tries=120 --waitretry=1 -q http://localhost:3000 -O /dev/null
                     make test
-                    kill $(lsof -t -i :3000)
+                    npx kill-port 3000
                     '''
                 }
             }
