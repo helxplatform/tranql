@@ -14,7 +14,7 @@ import yaml
 from flasgger import Swagger
 from flask import Flask, request, abort, Response, send_from_directory, render_template, make_response
 from flask_cors import CORS
-from flask_restx import Api, Resource
+from flask_restx import Api as BaseApi, Resource
 
 from tranql.concept import ConceptModel
 from tranql.exception import TranQLException
@@ -35,6 +35,15 @@ WEB_PREFIX = os.environ.get('WEB_PATH_PREFIX', '')
 WEB_PREFIX = f"/{WEB_PREFIX.strip('/')}" if WEB_PREFIX else ''
 
 app = Flask(__name__, template_folder=template_folder, static_folder=static_folder)
+
+# Due to a bug with Flask-RESTPlus/RESTX, even when doc generation is disabled on the root path, you still can't serve to it.
+# This is a workaround to manually override the portion that causes the problem.
+class Api(BaseApi):
+  def _register_doc(self, app_or_blueprint):
+    pass
+  @property
+  def base_path(self):
+    return ""
 
 api = Api(app)
 CORS(app)
