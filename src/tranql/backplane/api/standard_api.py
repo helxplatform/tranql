@@ -1,11 +1,7 @@
 from flask import Flask, request, Response, jsonify
-from flask_restful import Api, Resource, abort
+from flask_restx import Api, Resource, abort
 
 class StandardAPIResource(Resource):
-
-    def __init__(self):
-        super().__init__()
-
     @staticmethod
     def validate(request, definition, no_abort=False):
         if not isinstance(request, dict):

@@ -90,13 +90,6 @@ class App extends Component {
   constructor(props) {
     /* Create state elements and initialize configuration. */
     super(props);
-    if(process.env.NODE_ENV === 'development') {
-      this.tranqlURL = "http://localhost:8001";
-    }
-    if(process.env.NODE_ENV === 'production') {
-      // behind proxy this would treat the path used to load index.html as root
-      this.tranqlURL = window.location.href.endsWith('/') ? window.location.href.substring(0, window.location.href.length - 1 ) : window.location.href.length ;
-    }
     //this.tranqlURL = window.location.origin;
     //this.tranqlURL = "http://localhost:8001"; // dev only
     this.robokop_url = "https://robokop.renci.org";
@@ -1674,6 +1667,8 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
       };
       message.knowledge_graph.edges = newLinkArray;
     };
+    // NOTE: Pretty sure this is the culprit of a bug where the graph is set to the schema on page load,
+    // causing the graph view to display the schema until a query is made overriding it.
     this._configureMessage (message,false,false);
     this.setState({},() => {
       if (typeof noRenderChain === "undefined") noRenderChain = false;
@@ -1720,6 +1715,7 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
            if (result !== undefined) {
              console.log("Got schema from cache");
              let msg = result.data;
+             console.log(JSON.stringify(msg));
              const prevMsg = this.state.message;
              const prevRecord = this.state.record;
              this._configureMessage(msg,false,true);
@@ -3493,6 +3489,13 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
       </div>
     );
   }
+}
+
+if(process.env.NODE_ENV === 'production') {
+  // behind proxy this would treat the path used to load index.html as root
+  App.prototype.tranqlURL = window.location.href.endsWith('/') ? window.location.href.substring(0, window.location.href.length - 1 ) : window.location.href.length ;
+} else {
+  App.prototype.tranqlURL = "http://localhost:8001";
 }
 
 export default App;
