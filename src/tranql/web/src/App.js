@@ -222,6 +222,9 @@ class App extends Component {
     // Cache graphs locally using IndexedDB web component.
     this._cache = new Cache ();
 
+    // Whether or not the App is being embedded (specified by the query string argument "embed").
+    this.embedded = false;
+
     // Configure initial state.
     this.state = {
       code : `select chemical_substance->gene->disease
@@ -548,6 +551,7 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
    */
   _updateCacheViewer () {
     const updateQueryTitle = (query, queryTitle) => {
+      if (!this._cachedQueriesModal.current) return;
       query.data.title = queryTitle;
       this._cache.db.cache.update(query.id,query);
       /* Gets a bit messy here but since it's directly modifying a property of the object, and these objects are all formatted and stored in the ref's state, we have to work around it a bit. */
@@ -1176,8 +1180,8 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
    * @private
    */
   _setSchemaViewerActive (active) {
-    this._browseNodeInterface.current.hide();
-    this._linkExaminer.current.hide();
+    if (this._browseNodeInterface.current) this._browseNodeInterface.current.hide();
+    if (this._linkExaminer.current) this._linkExaminer.current.hide();
     this._closeObjectViewer();
 
     // Don't set state, thereby reloading the graph, if the schema viewer isn't enabled
@@ -1810,12 +1814,17 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
    * @private
    */
   async _getReasonerURLs () {
-    const res = await fetch(this.tranqlURL + '/tranql/reasonerURLs', {
-      method: "GET",
-    })
-    const reasonerURLs = await res.json();
+    try {
+      const res = await fetch(this.tranqlURL + '/tranql/reasonerURLs', {
+        method: "GET",
+      })
+      const reasonerURLs = await res.json();
 
-    return reasonerURLs;
+      return reasonerURLs;
+    } catch {
+      // Fetch failed.
+      return [];
+    }
   }
   /**
    * Get the concept model and stores as state.
@@ -2394,6 +2403,7 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
    * @private
    */
   _handleMessageDialog (title, message, details) {
+    if (!this._messageDialog.current) return;
     if (!Array.isArray(message)) {
       message = [{
         message: message,
@@ -2417,6 +2427,9 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
    * @private
    */
   _handleUpdateSettings (e) {
+    // We don't want settings to be modified when the app is embedded.
+    if (this.embedded) return;
+
     var targetName = e.currentTarget.name;
     console.log ("--update settings: " + targetName);
     if (targetName === 'dynamicIdResolution') {
@@ -2624,9 +2637,9 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
       );
   }
   _closeObjectViewer() {
-    if (this.state.objectViewerEnabled) {
+    if (this.state.objectViewerEnabled && this._graphSplitPane.current) {
       let width = this._graphSplitPane.current.splitPane.offsetWidth;
-        this._graphSplitPane.current.setState({ draggedSize : width, pane1Size : width , position : width });
+      this._graphSplitPane.current.setState({ draggedSize : width, pane1Size : width , position : width });
       this._updateGraphSize(width);
       this.setState({ objectViewerSelection : null });
     }
@@ -2698,6 +2711,7 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
    * @private
    */
   _updateDimensions() {
+    if (!this._graphSplitPane.current) return;
     let prevWinWidth = this._graphSplitPane.current.state.prevWinWidth;
     let prevWinHeight = this._tableSplitPane.current.state.prevWinHeight;
     if (prevWinWidth === undefined) prevWinWidth = window.innerWidth;
@@ -3020,10 +3034,16 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
     const params = qs.parse(window.location.search, { ignoreQueryPrefix : true });
 
     const tranqlQuery = params.q || params.query;
+    const embedded = params.embed;
     if (tranqlQuery !== undefined) {
-      this._updateCode(tranqlQuery);
-      this.setState({}, () => {
-        this._executeQuery();
+      this._queryExecOnLoad = tranqlQuery;
+    }
+    // i.e. "?embed=true" or "?embed"
+    if (embedded === "true" || embedded === "") {
+      this.embedded = true;
+      // Disable the cache when embedded
+      this.setState({
+        useCache : false
       });
     }
   }
@@ -3048,12 +3068,11 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
     this._updateDimensionsFunc = this._updateDimensions;
     window.addEventListener('resize', this._updateDimensionsFunc);
 
-    // Hydrate persistent state from local storage
-    this._hydrateState ();
-
     // Handle query string parameters (mini-router implementation)
     // & hydrate state accordingly
     this._handleQueryString ();
+    // Hydrate persistent state from local storage
+    if (!this.embedded) this._hydrateState ();
 
     // Populate the cache viewer
     this._updateCacheViewer ();
@@ -3066,6 +3085,14 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
     this._getSchema ();
 
     this._updateGraphSize(document.body.offsetWidth);
+
+    if (this._queryExecOnLoad !== undefined) {
+      // After initial loading is complete, execute the query specified in the URL's query string if there is one.
+      this._updateCode(this._queryExecOnLoad);
+      this.setState({}, () => {
+        this._executeQuery();
+      });
+    }
 
     this.setState({}, () => {
       if (this.fg) {
@@ -3087,7 +3114,31 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
   }
 
   render() {
-    // Render it.
+    // Render just the graph if the app is being embedded
+    if (this.embedded) return (
+      <div className="App" id="AppElement">
+        {
+          this.state.loading ? (
+            <div className="h-100 d-flex justify-content-center align-items-center">
+              <GridLoader
+                css={spinnerStyleOverride}
+                id={"spinner"}
+                sizeUnit={"px"}
+                size={12}
+                color={'var(--primary)'}
+                loading={true} />
+            </div>
+          ) : (
+            this._renderForceGraph (
+              this.state.graph, {
+              ref: (el) => {if (!this.state.schemaViewerActive) this.fg = el; this._updateFg ()}
+            })
+          )
+        }
+        <Message activeModal={this.state.activeModal} ref={this._messageDialog} />
+      </div>
+    );
+    // Render the app
     return (
       <div className="App" id="AppElement">
         {this._renderSettingsModal () }
