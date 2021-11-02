@@ -14,7 +14,7 @@ import { IoIosArrowDropupCircle, IoIosArrowDropdownCircle, IoIosSwap, IoMdBrowse
 import {
   FaCog, FaDatabase, FaQuestionCircle, FaSearch, FaHighlighter, FaEye,
   FaSpinner, FaMousePointer, FaTimes, FaFolderOpen, FaFileImport, FaFileExport,
-  FaArrowsAlt, FaTrash, FaPlayCircle, FaTable, FaCopy, FaPython
+  FaArrowsAlt, FaTrash, FaPlayCircle, FaTable, FaCopy, FaPython, FaFrown
 } from 'react-icons/fa';
 // import { Tab, Tabs, TabList, TabPanel } from 'react-tabs';
 import 'react-confirm-alert/src/react-confirm-alert.css';
@@ -3045,6 +3045,17 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
       this.setState({
         useCache : false
       });
+      // Disable localStorage on embedded websites. Even though settings/cache is disabled,
+      // some other parts of the app also write/read from localStorage, for example:
+      //   when a query is executed, it stores the query in local stoarge under the key `code`.
+      window.localStorage.__proto__ = Object.create({
+        setItem: () => {},
+        removeItem: () => {},
+        key: () => {},
+        getItem: () => {},
+        removeItem: () => {},
+        length: 0
+      });
     }
   }
   /**
@@ -3129,10 +3140,17 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
                 loading={true} />
             </div>
           ) : (
-            this._renderForceGraph (
-              this.state.graph, {
-              ref: (el) => {if (!this.state.schemaViewerActive) this.fg = el; this._updateFg ()}
-            })
+            this.state.graph.links.length === 0 ? (
+              <div className="h-100 d-flex justify-content-center align-items-center flex-column text-muted">
+                <FaFrown style={{fontSize: "32px"}} />
+                <b className="mt-2">The query returned no results.</b>
+              </div>
+            ) : (
+              this._renderForceGraph (
+                this.state.graph, {
+                ref: (el) => {this.fg = el; this._updateFg ()}
+              })
+            )
           )
         }
         <Message activeModal={this.state.activeModal} ref={this._messageDialog} />
