@@ -714,6 +714,18 @@ body {
   left:-1.25px;
   background-color:rgb(215,215,215);
 }
+
+/* Embedded style rules */
+.App.embedded .react-codemirror2 {
+}
+.App.embedded .CodeMirror {
+  height: 100% !important;
+}
+.App.embedded .CodeMirror-scroll {
+  height: 100% !important;
+  max-height: 30vh;
+}
+
 @-ms-keyframes spin { 100% { -moz-transform: rotate(360deg); } }
 @-o-keyframes spin { 100% { -moz-transform: rotate(360deg); } }
 @-moz-keyframes spin { 100% { -moz-transform: rotate(360deg); } }

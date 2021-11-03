@@ -79,6 +79,18 @@ const spinnerStyleOverride = css`
 `;
 
 /**
+ * Used to determine embedding behavior. Set based on query string param.
+ * 
+ * @enum
+ * @see {App._handleQueryString}
+ */
+const EmbedMode = Object.freeze({
+  NONE: 0,
+  FULL: 1,
+  SIMPLE: 2
+});
+
+/**
  * @desc The main TranQL application class.
  * Integrates the query editor, query executor, rendering pipeline, and visualization.
  * @author Steve Cox scox@renci.org
@@ -126,6 +138,10 @@ class App extends Component {
     this.__highlightTypes = highlightTypes.bind(this);
 
     this._setConnectionExaminerActive = this._setConnectionExaminerActive.bind(this);
+
+    // Non-visualization components
+    this._renderCodemirror = this._renderCodemirror.bind (this);
+    this._renderBanner = this._renderBanner.bind (this);
 
     // The visualization
     this._renderForceGraph = this._renderForceGraph.bind (this);
@@ -222,8 +238,13 @@ class App extends Component {
     // Cache graphs locally using IndexedDB web component.
     this._cache = new Cache ();
 
-    // Whether or not the App is being embedded (specified by the query string argument "embed").
-    this.embedded = false;
+    /**
+     * Specifies the way in which the embedded app should render (specified by the query string argument "embed").
+     * 
+     * Related: the property `embedded` is functionally equivalent to `this.embedMode !== EmbedMode.NONE`, which abstracts
+     * away from the embed mode functionality.
+     */
+    this.embedMode = EmbedMode.NONE;
 
     // Configure initial state.
     this.state = {
@@ -544,6 +565,9 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
 
     // Promises
     this.schemaPromise = new Promise(()=>{});
+  }
+  get embedded() {
+    return this.embedMode !== EmbedMode.NONE;
   }
   /**
    * Updates the queries contained within the cache viewer modal.
@@ -2183,6 +2207,74 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
     }
   }
   /**
+   * Renders the App banner/header element.
+   * 
+   */
+  _renderBanner() {
+    return (
+      <header className="App-header" >
+        <div id="headerContainer" className="no-select">
+          <p style={{display:"inline-block",flex:1}}>TranQL</p>
+          <Message activeModal={this.state.activeModal} ref={this._messageDialog} />
+          <GridLoader
+            css={spinnerStyleOverride}
+            id={"spinner"}
+            sizeUnit={"px"}
+            size={6}
+            color={'#2cbc12'}
+            loading={this.state.loading && (this.state.schemaViewerActive || !this.state.schemaViewerEnabled)} />
+          {
+            !this.state.toolbarEnabled &&
+              <Button id="navModeButton"
+                      outline
+                      color="primary" onClick={() => {this._setNavMode(!this.state.navigateMode); this._setSelectMode(!this.state.selectMode)}}>
+                { this.state.navigateMode && (this.state.visMode === '3D' || this.state.visMode === '2D') ? "Navigate" : "Select" }
+              </Button>
+          }
+          {
+            !this.state.loading ? (
+              <Button id="runButton"
+                      outline
+                      color="success" onClick={this._executeQuery}>
+                Run
+              </Button>
+            ) : (
+              <Button id="abortButton"
+                      outline
+                      color="danger" onClick={this._abortQuery}>
+                Cancel
+              </Button>
+            )
+          }
+          <div id="appControlContainer" style={{display:(this.state.toolbarEnabled ? "none" : "")}}>
+            <FaCog data-tip="Configure application settings" id="settings" className="App-control" onClick={() => this._setActiveModal("SettingsModal")} />
+            <FaPlayCircle data-tip="Answer Navigator - see each answer, its graph structure, links, knowledge source and literature provenance" id="answerViewer" className="App-control" onClick={this._handleShowAnswerViewer} />
+          </div>
+        </div>
+      </header>
+    );
+  }
+  /**
+   * Renders the codemirror query element.
+   * 
+   * @private
+   */
+  _renderCodemirror() {
+    return (
+      <CodeMirror editorDidMount={(editor)=>{this._codemirror = editor;}}
+                  className="query-code"
+                  value={this.state.code}
+                  onBeforeChange={(editor, data, code) => this._updateCode(code)}
+                  onChange={(editor) => {
+                    if (editor.state.completionActive) {
+                      this._codeAutoComplete();
+                    }
+                  }}
+                  options={this.state.codeMirrorOptions}
+                  autoFocus={true} />
+    );
+  }
+  /**
    * Render the force directed graph in either 2D or 3D rendering modes.
    * @param {Object} data - Data containing nodes and links that is used to render the force graph
    * @param {Object} props - Override default props used to render the graph.
@@ -3039,8 +3131,23 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
       this._queryExecOnLoad = tranqlQuery;
     }
     // i.e. "?embed=true" or "?embed"
-    if (embedded === "true" || embedded === "") {
-      this.embedded = true;
+    if (embedded !== null) {
+      // Note that `this.embedded` is a derived property of embedMode (without a setter) so there is no need to set it here.
+      switch (embedded.toLowerCase()) {
+        case "full":
+          this.embedMode = EmbedMode.FULL;
+          break;
+        case "graph":
+        case "simple":
+        case "true":
+        case "":
+          this.embedMode = EmbedMode.SIMPLE;
+          break;
+        default:
+          console.error("Unknown embed type:", embedded);
+          this.embedMode = EmbedMode.SIMPLE;
+          break;
+      }
       // Disable the cache when embedded
       this.setState({
         useCache : false
@@ -3127,10 +3234,18 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
   render() {
     // Render just the graph if the app is being embedded
     if (this.embedded) return (
-      <div className="App" id="AppElement">
+      <div className="App d-flex flex-column embedded" id="AppElement">
         {
-          this.state.loading ? (
-            <div className="h-100 d-flex justify-content-center align-items-center">
+          this.embedMode === EmbedMode.FULL && (
+            <>
+              {this._renderBanner()}
+              {this._renderCodemirror()}
+            </>
+          )
+        }
+        <div className="d-flex justify-content-center align-items-center flex-column flex-grow-1" style={{backgroundColor: "black"}}>
+          {
+            this.state.loading ? (
               <GridLoader
                 css={spinnerStyleOverride}
                 id={"spinner"}
@@ -3138,21 +3253,21 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
                 size={12}
                 color={'var(--primary)'}
                 loading={true} />
-            </div>
-          ) : (
-            this.state.graph.links.length === 0 ? (
-              <div className="h-100 d-flex justify-content-center align-items-center flex-column text-muted">
-                <FaFrown style={{fontSize: "32px"}} />
-                <b className="mt-2">The query returned no results.</b>
-              </div>
             ) : (
-              this._renderForceGraph (
-                this.state.graph, {
-                ref: (el) => {this.fg = el; this._updateFg ()}
-              })
+              this.state.graph.links.length === 0 ? (
+              <div className="d-flex justify-content-center align-items-center flex-column text-muted">
+                  <FaFrown style={{fontSize: "32px"}} />
+                  <b className="mt-2">The query returned no results.</b>
+              </div>
+              ) : (
+                this._renderForceGraph (
+                  this.state.graph, {
+                  ref: (el) => {this.fg = el; this._updateFg ()}
+                })
+              )
             )
-          )
-        }
+          }
+        </div>
         <Message activeModal={this.state.activeModal} ref={this._messageDialog} />
       </div>
     );
@@ -3235,46 +3350,7 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
                       emptyText=<div style={{fontSize:"17px"}}>You currently have no cached queries.</div>/>
         <AnswerViewer show={true} ref={this._answerViewer} />
         <ReactTooltip place="left"/>
-        <header className="App-header" >
-          <div id="headerContainer" className="no-select">
-            <p style={{display:"inline-block",flex:1}}>TranQL</p>
-            <Message activeModal={this.state.activeModal} ref={this._messageDialog} />
-            <GridLoader
-              css={spinnerStyleOverride}
-              id={"spinner"}
-              sizeUnit={"px"}
-              size={6}
-              color={'#2cbc12'}
-              loading={this.state.loading && (this.state.schemaViewerActive || !this.state.schemaViewerEnabled)} />
-            {
-              !this.state.toolbarEnabled &&
-                <Button id="navModeButton"
-                        outline
-                        color="primary" onClick={() => {this._setNavMode(!this.state.navigateMode); this._setSelectMode(!this.state.selectMode)}}>
-                  { this.state.navigateMode && (this.state.visMode === '3D' || this.state.visMode === '2D') ? "Navigate" : "Select" }
-                </Button>
-            }
-            {
-              !this.state.loading ? (
-                <Button id="runButton"
-                        outline
-                        color="success" onClick={this._executeQuery}>
-                  Run
-                </Button>
-              ) : (
-                <Button id="abortButton"
-                        outline
-                        color="danger" onClick={this._abortQuery}>
-                  Cancel
-                </Button>
-              )
-            }
-            <div id="appControlContainer" style={{display:(this.state.toolbarEnabled ? "none" : "")}}>
-              <FaCog data-tip="Configure application settings" id="settings" className="App-control" onClick={() => this._setActiveModal("SettingsModal")} />
-              <FaPlayCircle data-tip="Answer Navigator - see each answer, its graph structure, links, knowledge source and literature provenance" id="answerViewer" className="App-control" onClick={this._handleShowAnswerViewer} />
-            </div>
-          </div>
-        </header>
+        {this._renderBanner()}
         <div>
           {
             this.state.showCodeMirror ?
@@ -3288,17 +3364,7 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
                                  setActiveModal={this._setActiveModal}
                                  cache={this._cache}
                                  setCode={this._updateCode}/>*/}
-                  <CodeMirror editorDidMount={(editor)=>{this._codemirror = editor;}}
-                  className="query-code"
-                  value={this.state.code}
-                  onBeforeChange={(editor, data, code) => this._updateCode(code)}
-                  onChange={(editor) => {
-                    if (editor.state.completionActive) {
-                      this._codeAutoComplete();
-                    }
-                  }}
-                  options={this.state.codeMirrorOptions}
-                  autoFocus={true} />
+                  {this._renderCodemirror()}
                 </>
               ) :
               (
