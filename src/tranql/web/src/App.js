@@ -30,6 +30,7 @@ import { GridLoader } from 'react-spinners';
 import SplitPane from 'react-split-pane';
 import Cache from './Cache.js';
 import AnswerViewer from './AnswerViewer.js';
+import GammaViewer from './GammaViewer.js';
 import QueriesModal from './QueriesModal.js';
 import HistoryViewer from './HistoryViewer.js';
 import BrowseNodeInterface from './BrowseNodeInterface.js';
@@ -144,6 +145,7 @@ class App extends Component {
     // Non-visualization components
     this._renderCodemirror = this._renderCodemirror.bind (this);
     this._renderBanner = this._renderBanner.bind (this);
+    this._renderAnswerViewer = this._renderAnswerViewer.bind (this);
 
     // The visualization
     this._renderForceGraph = this._renderForceGraph.bind (this);
@@ -2218,8 +2220,20 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
   _fgAdjustCharge (charge) {
     if (this.fg) {
       this.fg.d3Force ('charge').strength(charge);
-      this.fg.refresh ();
+      if (this.fg.refresh) this.fg.refresh ();
     }
+  }
+  /**
+   * Render the Answer Viewer modal.
+   * 
+   */
+  _renderAnswerViewer (customProps) {
+    return (
+      <GammaViewer data={this.state.message}
+                   show={this.state.activeModal==="AnswerViewerModal"}
+                   onHide={() => this._setActiveModal(null)}
+                   {...customProps}/>
+    );
   }
   /**
    * Renders the App banner/header element.
@@ -2305,6 +2319,8 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
       height:this.state.graphHeight,
       linkAutoColorBy:"type",
       nodeAutoColorBy:"type",
+      linkDirectionalArrowLength: 3.5,
+      linkDirectionalArrowRelPos: 1,
       d3AlphaDecay:0.2,
       strokeWidth:10,
       linkWidth:2,
@@ -2464,6 +2480,12 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
     );
   }
   _handleShowAnswerViewer () {
+    if (this.state.message && this.state.message.message) {
+      this._setActiveModal("AnswerViewerModal");
+    }
+  }
+  /*
+  _handleShowAnswerViewer () {
     console.log (this._answerViewer);
     if (this.state.message) {
       var message = this.state.message;
@@ -2501,6 +2523,7 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
       });
     }
   }
+  */
   /**
    * Handles error messages
    *
@@ -2548,7 +2571,7 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
       forceGraphOpts.enableNodeDrag = e.currentTarget.checked;
       this.setState({ forceGraphOpts });
       localStorage.setItem('forceGraphOpts', JSON.stringify (forceGraphOpts));
-      this.fg.refresh();
+      if (this.fg.refresh) this.fg.refresh();
     } else if (targetName === 'useToolCursor') {
       this.setState ({ useToolCursor : e.currentTarget.checked });
       localStorage.setItem (targetName, JSON.stringify (e.currentTarget.checked));
@@ -3276,14 +3299,20 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
                   <b className="mt-2">The query returned no results.</b>
               </div>
               ) : (
-                this._renderForceGraph (
+                <div style={{position: "relative"}}>
+                {this._renderForceGraph (
                   this.state.graph, {
                   ref: (el) => {this.fg = el; this._updateFg ()}
-                })
+                })}
+                <FaPlayCircle style={{position: "absolute", top: "12px", right: "12px", fontSize: "20px"}}
+                              className="App-control-toolbar"
+                              onClick={this._handleShowAnswerViewer}/>
+                </div>
               )
             )
           }
         </div>
+        {this._renderAnswerViewer({asModal: true})}
         {/* <Message activeModal={this.state.activeModal} ref={this._messageDialog} /> */}
       </div>
     );
@@ -3364,7 +3393,8 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
                       title={"Cached queries"+(!this.state.useCache?' (cache disabled)':'')}
                       tools={this.state.cachedQueriesModalTools}
                       emptyText=<div style={{fontSize:"17px"}}>You currently have no cached queries.</div>/>
-        <AnswerViewer show={true} ref={this._answerViewer} />
+        {/* <AnswerViewer show={true} ref={this._answerViewer} /> */}
+        {this._renderAnswerViewer()}
         <ReactTooltip place="left"/>
         {this._renderBanner()}
         <div>
