@@ -39,7 +39,7 @@ import HelpModal, { ToolbarHelpModal } from './HelpModal.js';
 import ImportExportModal from './ImportExportModal.js';
 import confirmAlert from './confirmAlert.js';
 import highlightTypes from './highlightTypes.js';
-import { shadeColor, adjustTitle, hydrateState, formatBytes } from './Util.js';
+import { shadeColor, adjustTitle, hydrateState, formatBytes, debounce } from './Util.js';
 import { Toolbar, Tool, /*ToolGroup*/ } from './Toolbar.js';
 import LinkExaminer from './LinkExaminer.js';
 // import FindTool from './FindTool.js';
@@ -122,6 +122,8 @@ class App extends Component {
     this._codeAutoComplete = this._codeAutoComplete.bind(this);
     this._updateCode = this._updateCode.bind (this);
     this._executeQuery = this._executeQuery.bind(this);
+    // For usage where the query is auto-executed on change (e.g., when embedded).
+    this._debouncedExecuteQuery = debounce(this._executeQuery, 250);
     this._abortQuery = this._abortQuery.bind(this);
     this._configureMessage = this._configureMessage.bind (this);
     this._translateGraph = this._translateGraph.bind (this);
@@ -2085,6 +2087,19 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
    * @private
    */
   _updateFg () {
+    if (this.fg) {
+      // Performing actions such as dragging a node will reset fg.controls().enabled back to true automatically,
+      // thus it's necessary to hook into the TrackballControls and make sure that they're immediately re-disabled.
+      if (this.embedded) {
+        const controls = this.fg.controls();
+        controls.enabled = false;
+        const _update = controls.update.bind(controls);
+        controls.update = (...args) => {
+          _update(...args);
+          if (controls.enabled === true) controls.enabled = false;
+        }
+      }
+    }
     // let graph = this.state.schemaViewerEnabled && this.state.schemaViewerActive ? this.state.schema : this.state.graph;
   }
   /**
@@ -2269,6 +2284,7 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
                     if (editor.state.completionActive) {
                       this._codeAutoComplete();
                     }
+                    if (this.embedMode === EmbedMode.SIMPLE) this._debouncedExecuteQuery();
                   }}
                   options={this.state.codeMirrorOptions}
                   autoFocus={true} />
@@ -3131,7 +3147,7 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
       this._queryExecOnLoad = tranqlQuery;
     }
     // i.e. "?embed=true" or "?embed"
-    if (embedded !== null) {
+    if (embedded !== undefined && embedded !== null) {
       // Note that `this.embedded` is a derived property of embedMode (without a setter) so there is no need to set it here.
       switch (embedded.toLowerCase()) {
         case "full":
@@ -3238,7 +3254,7 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
         {
           this.embedMode === EmbedMode.FULL && (
             <>
-              {this._renderBanner()}
+              {/* {this._renderBanner()} */}
               {this._renderCodemirror()}
             </>
           )
@@ -3268,7 +3284,7 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
             )
           }
         </div>
-        <Message activeModal={this.state.activeModal} ref={this._messageDialog} />
+        {/* <Message activeModal={this.state.activeModal} ref={this._messageDialog} /> */}
       </div>
     );
     // Render the app

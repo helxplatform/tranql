@@ -717,8 +717,10 @@ body {
 
 /* Embedded style rules */
 .App.embedded .react-codemirror2 {
+  border: 2px solid #f0f0f0;
 }
 .App.embedded .CodeMirror {
+  padding: 0;
   height: 100% !important;
 }
 .App.embedded .CodeMirror-scroll {
