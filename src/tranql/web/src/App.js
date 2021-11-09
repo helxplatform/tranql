@@ -29,6 +29,7 @@ import { Range } from 'rc-slider';
 import { GridLoader } from 'react-spinners';
 import SplitPane from 'react-split-pane';
 import Cache from './Cache.js';
+import TranQLEmbedded, { EmbedMode } from './TranQLEmbedded.js';
 import AnswerViewer from './AnswerViewer.js';
 import GammaViewer from './GammaViewer.js';
 import QueriesModal from './QueriesModal.js';
@@ -78,18 +79,6 @@ const spinnerStyleOverride = css`
     margin: 4 auto;
     border-color: red;
 `;
-
-/**
- * Used to determine embedding behavior. Set based on query string param.
- * 
- * @enum
- * @see {App._handleQueryString}
- */
-const EmbedMode = Object.freeze({
-  NONE: 0,
-  FULL: 1,
-  SIMPLE: 2
-});
 
 /**
  * @desc The main TranQL application class.
@@ -2298,7 +2287,7 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
                     if (editor.state.completionActive) {
                       this._codeAutoComplete();
                     }
-                    if (this.embedMode === EmbedMode.SIMPLE) this._debouncedExecuteQuery();
+                    if (this.embedded) this._debouncedExecuteQuery();
                   }}
                   options={this.state.codeMirrorOptions}
                   autoFocus={true} />
@@ -3272,50 +3261,13 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
 
   render() {
     // Render just the graph if the app is being embedded
-    if (this.embedded) return (
-      <div className="App d-flex flex-column embedded" id="AppElement">
-        {
-          this.embedMode === EmbedMode.FULL && (
-            <>
-              {/* {this._renderBanner()} */}
-              {this._renderCodemirror()}
-            </>
-          )
-        }
-        <div className="d-flex justify-content-center align-items-center flex-column flex-grow-1" style={{backgroundColor: "black"}}>
-          {
-            this.state.loading ? (
-              <GridLoader
-                css={spinnerStyleOverride}
-                id={"spinner"}
-                sizeUnit={"px"}
-                size={12}
-                color={'var(--primary)'}
-                loading={true} />
-            ) : (
-              this.state.graph.links.length === 0 ? (
-              <div className="d-flex justify-content-center align-items-center flex-column text-muted">
-                  <FaFrown style={{fontSize: "32px"}} />
-                  <b className="mt-2">The query returned no results.</b>
-              </div>
-              ) : (
-                <div style={{position: "relative"}}>
-                {this._renderForceGraph (
-                  this.state.graph, {
-                  ref: (el) => {this.fg = el; this._updateFg ()}
-                })}
-                <FaPlayCircle style={{position: "absolute", top: "12px", right: "12px", fontSize: "20px"}}
-                              className="App-control-toolbar"
-                              onClick={this._handleShowAnswerViewer}/>
-                </div>
-              )
-            )
-          }
-        </div>
-        {this._renderAnswerViewer({asModal: true})}
-        {/* <Message activeModal={this.state.activeModal} ref={this._messageDialog} /> */}
-      </div>
-    );
+    if (this.embedded) return <TranQLEmbedded embedMode={this.embedMode}
+                                              graphLoading={this.state.loading}
+                                              graph={this.state.graph}
+                                              renderForceGraph={this._renderForceGraph}
+                                              renderCodemirror={this._renderCodemirror}
+                                              renderAnswerViewer={this._renderAnswerViewer}
+                                              graphRefCallback={(el) => {this.fg = el; this._updateFg ()}}/>;
     // Render the app
     return (
       <div className="App" id="AppElement">
