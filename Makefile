@@ -35,6 +35,9 @@ install.python:
 install.npm:
 	cd src/tranql/web; npm install; npm run build
 
+install.npm_nobuild:
+	cd src/tranql/web; npm install;
+
 #install: Install application
 install: install.python install.npm
 
@@ -45,7 +48,7 @@ test.python:
 
 #test.npm: Run all NPM tests
 test.npm:
-	echo "test NPM"
+	cd src/tranql/web; npm test -- --watchAll=false
 
 #test: Run all tests
 test: test.python test.npm
@@ -71,4 +74,7 @@ download:
 #run.local: seeds redis with data, builds web page and runs tranql docker container
 run.local: download
 	docker-compose up -d
+	cd src/tranql/web; npm start;
+
+run.web:
 	cd src/tranql/web; npm start;
