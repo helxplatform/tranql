@@ -1,5 +1,11 @@
 import React, { Component } from 'react';
 import ReactTooltip from 'react-tooltip';
+import {
+  FaArrowsAlt, FaMousePointer, FaHighlighter, FaEye, FaPlayCircle,
+  FaSearch, FaQuestionCircle, FaDatabase, FaFolderOpen, FaCog,
+  FaTable
+} from 'react-icons/fa';
+import { IoMdBrowsers } from 'react-icons/io';
 import { CSSStringtoRGB } from './Util.js';
 import './Toolbar.css';
 
@@ -486,4 +492,71 @@ export class Toolbar extends Component {
     )
   }
 
+}
+
+export class AppToolbar extends Component {
+  _getTools() {
+    return (
+      <>
+      <Tool name="Navigate" shortcut="v" description="Click a node to move the camera to it and make it the center of rotation." callback={this.props.navigateToolCallback}>
+      <FaArrowsAlt/>
+      </Tool>
+      <Tool name="Select" shortcut="g" description="Open a node or link in the object viewer" callback={this.props.selectToolCallback}>
+        <FaMousePointer/>
+      </Tool>
+      <Tool name="Highlight Types"
+            shortcut="h"
+            description="Highlights all elements of the type that is being hovered over.<br/> Left click filters all of that type. Right click filters all not of that type."
+            callback={this.props.highlightTypesToolCallback}>
+        <FaHighlighter/>
+      </Tool>
+      <Tool name="Examine Connection"
+            shortcut="f"
+            description="Displays a connection between two nodes and all links between them"
+            callback={this.props.examineConnectionToolCallback}>
+        <FaEye/>
+      </Tool>
+      <Tool name="Browse node"
+            shortcut="e"
+            description="Browse new nodes connected to a node in the graph by a biolink modal type"
+            callback={this.props.browseNodeToolCallback}>
+        <IoMdBrowsers/>
+      </Tool>
+      </>
+    );
+  }
+  _getButtons() {
+    return (
+      <>
+      <FaPlayCircle data-tip="Answer Navigator - see each answer, its graph structure, links, knowledge source and literature provenance"
+                    id="answerViewerToolbar"
+                    className="App-control-toolbar fa"
+                    onClick={this.props.answerViewerCallback} />
+      <FaSearch data-tip="Find tool - helps to quickly locate specific things in the graph" id="findTool" className="App-control-toolbar fa" onClick={this.props.findToolCallback}/>
+      <FaQuestionCircle data-tip="Help & Information" id="helpButton" className="App-control-toolbar fa" onClick={this.props.helpToolCallback}/>
+      <FaDatabase data-tip="Cache Viewer - search through previous queries" id="cachedQueriesButton" className="App-control-toolbar fa" onClick={this.props.cachedQueriesToolCallback}/>
+      <FaFolderOpen data-tip="Import/Export - Import or export graphs" id="importExportButton" className="App-control-toolbar fa" onClick={this.props.importExportToolCallback}/>
+      <FaCog data-tip="Configure application settings" id="settingsToolbar" className="App-control-toolbar fa" onClick={this.props.settingsToolCallback} />
+      <FaTable data-active={this.props.appState.tableViewerComponents.tableViewerCompActive} data-tip="View a tabular representation of the active graph" id="tableViewButton" className="App-control-toolbar fa" onClick={this.props.tableViewerToolCallback}/>
+      {
+      // Perfectly functional but does not provide enough functionality as of now to warrant its presence
+      /*<FaBarChart data-tip="Type Bar Chart - see all the types contained within the graph distributed in a bar chart"
+                  className="App-control-toolbar fa"
+                  onClick={() => this.setState ({ showTypeChart : true })} />*/
+      // The tool works as intended but the annotator does not yet.
+      /*<FaPen className="App-control-toolbar fa" data-tip="Annotate Graph" onClick={() => this._annotateGraph ()}/>*/
+      }
+      </>
+    );
+  }
+  render() {
+    return (
+      <Toolbar id="toolbar"
+               default={0}
+               overrideCursor={this.props.appState.useToolCursor}
+               tools={this._getTools()}
+               buttons={this._getButtons()}
+               onlyUseShortcutsWhen={[HTMLBodyElement]}/>
+    );
+  }
 }

@@ -38,10 +38,10 @@ export default class TableViewer extends Component {
     this.state = {
       tableFilterView : false,
       tableAttributes : this.props.defaultTableAttributes,
-      filterFilter : ''
+      filterFilter : '',
+      activeTab: undefined
     };
 
-    this._tabs = React.createRef();
     this._filterInputFilter = React.createRef();
 
     this.resetAttributes = this.resetAttributes.bind(this);
@@ -51,7 +51,11 @@ export default class TableViewer extends Component {
     this.setState({ tableAttributes : this.props.defaultTableAttributes });
   }
   _getActiveTabName() {
-    return this._tabs.current.props.activeKey;
+    // return this._tabs.current.props.activeKey;
+    return this.state.activeTab;
+  }
+  componentDidMount() {
+    this.setState({ activeTab: Object.keys(this.props.data)[0] });
   }
   render() {
     if (!this.props.tableView) return null;
@@ -82,7 +86,7 @@ export default class TableViewer extends Component {
           </Button>
           <Button className="table-viewer-close-button" size="sm" color="danger" onClick={() => this.props.close()} {...this.props.closeButtonProps}>Close</Button>
         </div>
-        <Tabs defaultActiveKey={Object.keys(this.props.data)[0]} ref={this._tabs}>
+        <Tabs activeKey={this.state.activeTab} onSelect={(key) => this.setState({activeTab: key})}>
           {
             (() => {
               const elementTypes = Object.keys(this.props.data);
@@ -186,5 +190,63 @@ export default class TableViewer extends Component {
       </div>
       </div>
     );
+  }
+}
+
+export class AppTableViewer extends Component {
+  render() {
+    return (
+      <TableViewer tableView={this.props.tableViewerComponents.tableViewerCompActive}
+                         close={this.props.closeTableViewer}
+                         ref={this.props.innerRef}
+                         data={(() => {
+                           const graph = this.props.appState.schemaViewerActive && this.props.appState.schemaViewerEnabled ? this.props.appState.schema : this.props.appState.graph;
+                           // Table viewer generates a tab for every property in the object provided, but we only want nodes and links as our tabs.
+                           return {
+                             nodes : graph.nodes.map((node) => node.origin),
+                             links : graph.links.map((link) => link.origin)
+                           };
+                         })()}
+                         defaultTableAttributes={{
+                           "nodes" : [
+                             "name",
+                             "id",
+                             "type"
+                           ],
+                           "links" : [
+                             "source_id",
+                             "target_id",
+                             "type",
+                             "source_database"
+                           ]
+                         }}
+                         tableProps={{
+                           getTdProps: (tableState, rowInfo, columnInfo, tableInstance) => {
+                             const getElement = () => {
+                               const isNode = this.props.tableViewer.current._getActiveTabName() === "nodes";
+                               const graph = this.props.appState.schemaViewerActive && this.props.appState.schemaViewerEnabled ? this.props.appState.schema : this.props.appState.graph;
+                               const elements = isNode ? graph.nodes : graph.links;
+                               const origin = rowInfo.original;
+
+                               const element = elements.filter((element) => element.origin.id === origin.id)[0];
+
+                               const clickMethod = (isNode ? () => {
+                                 this.props.handleNodeClick(element);
+                               } : () => {
+                                 this.props.handleLinkClick(element, true);
+                               });
+
+                               return {
+                                 click : clickMethod
+                               };
+                             }
+                             return {
+                               onClick: () => {
+                                 getElement().click();
+                               }
+                             };
+                           }
+                         }}/>
+    )
   }
 }
