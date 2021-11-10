@@ -70,6 +70,7 @@ function_body.setParseAction(lambda toks: { "name" : toks[0], "args" : toks[1:] 
 concept_or_var_list = Group(LBRACK.suppress() + delimitedList(concept_value | ident) + RBRACK.suppress())
 # need to add support for alg expressions
 columnRval = function_body | realNum | intNum | quotedString.addParseAction(removeQuotes) | columnName | concept_or_var_list
+
 whereCondition = Group(
     ( columnName + binop + columnRval ) |
     # ( columnName + in_ + concept_value_list) |
@@ -140,11 +141,23 @@ incomplete_question_graph_expression = ZeroOrMore(question_graph_element + incom
 # In a group just so that it is consistent with an actual table which is stored in a list.
 openTable = Group(delimitedList(tableNameList | Group((Literal('"') | Literal("'")) + Regex('.*'))))
 
+# Right now, there will only be support for autocompletion of strings (that's really the only place where it makes sense).
+incomplete_string = Group(delimitedList((Literal('"') | Literal("'")) + Regex('.*')))
+
+incomplete_where_expression = Forward()
+incomplete_where_condition = Group(
+    ( columnName + binop + (quotedString.addParseAction(removeQuotes) | incomplete_string) ) |
+    ( columnName + binop) |
+    columnName |
+    ( "(" + incomplete_where_expression + ")" )
+)
+incomplete_where_expression << incomplete_where_condition + ZeroOrMore( ( and_ | or_ ) + incomplete_where_condition )
+
 statement <<= (
     Group(
         Group(SELECT + incomplete_question_graph_expression)("concepts") + Suppress(optWhite) +
         Optional(Group(FROM + (openTable | Empty()))) + Suppress(optWhite) +
-        Optional(Group(WHERE + whereExpression("where"))) + Suppress(optWhite) +
+        Optional(Group(WHERE + (incomplete_where_expression("where") | Empty()))) + Suppress(optWhite) +
         Optional(Group(SET + setExpression("set")))("select")
     )
     |
