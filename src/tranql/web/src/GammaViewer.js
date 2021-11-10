@@ -5,7 +5,6 @@ import GammaViewerComponent from 'gamma-viewer-web';
 console.log(React.version);
 
 export default function GammaViewer({ data, show, onHide, asModal=true }) {
-    console.log("Rerender");
     const gammaData = JSON.parse(JSON.stringify(data));
     const validMessage = gammaData && gammaData.message;
     // if (validMessage) {

@@ -113,7 +113,7 @@ class App extends Component {
     this._updateCode = this._updateCode.bind (this);
     this._executeQuery = this._executeQuery.bind(this);
     // For usage where the query is auto-executed on change (e.g., when embedded).
-    this._debouncedExecuteQuery = debounce(this._executeQuery, 250);
+    this._debouncedExecuteQuery = debounce(this._executeQuery, 1000);
     this._abortQuery = this._abortQuery.bind(this);
     this._configureMessage = this._configureMessage.bind (this);
     this._translateGraph = this._translateGraph.bind (this);
