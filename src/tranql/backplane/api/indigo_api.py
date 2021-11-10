@@ -3,8 +3,8 @@ from tranql.backplane.api.standard_api import StandardAPIResource
 from tranql.config import config
 
 class IndigoQuery(StandardAPIResource):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.base_url = config.get("INDIGO_URL")
         self.query_url = f'{self.base_url}/reasoner/api/v1/query'
 
