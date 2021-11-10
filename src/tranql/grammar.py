@@ -146,7 +146,7 @@ incomplete_string = Group(delimitedList((Literal('"') | Literal("'")) + Regex('.
 
 incomplete_where_expression = Forward()
 incomplete_where_condition = Group(
-    ( columnName + binop + (quotedString.addParseAction(removeQuotes) | incomplete_string) ) |
+    ( columnName + binop + (quotedString | incomplete_string) ) |
     ( columnName + binop) |
     columnName |
     ( "(" + incomplete_where_expression + ")" )
