@@ -2234,6 +2234,8 @@ class App extends Component {
         case "":
           this.embedMode = EmbedMode.SIMPLE;
           break;
+        case "false":
+          break;
         default:
           console.error("Unknown embed type:", embedded);
           this.embedMode = EmbedMode.SIMPLE;
