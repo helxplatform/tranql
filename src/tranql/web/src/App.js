@@ -94,6 +94,8 @@ class App extends Component {
     //this.tranqlURL = window.location.origin;
     //this.tranqlURL = "http://localhost:8001"; // dev only
     this.robokop_url = "https://robokop.renci.org";
+    this.nameResolutionURL = "https://name-resolution-sri.renci.org";
+    this.nodeNormalizationURL = "https://nodenormalization-sri.renci.org/1.2";
     this._contextMenuId = "contextMenuId";
 
     // Query editor support.
@@ -101,12 +103,14 @@ class App extends Component {
     this._getModelConcepts = this._getModelConcepts.bind (this);
     this._getModelRelations = this._getModelRelations.bind (this);
     this._getReasonerURLs = this._getReasonerURLs.bind (this);
-    this._codeAutoComplete = autoComplete.bind(this);
     this._updateCode = this._updateCode.bind (this);
     this._executeQuery = this._executeQuery.bind(this);
     this._abortQuery = this._abortQuery.bind(this);
     this._configureMessage = this._configureMessage.bind (this);
     this._translateGraph = this._translateGraph.bind (this);
+    // Specifically for autocomplete
+    this._codeAutoComplete = autoComplete.bind(this);
+    this._resolveIdentifiersFromConcept = this._resolveIdentifiersFromConcept.bind(this);
 
     // Toolbar
     this._setNavMode = this._setNavMode.bind(this);
@@ -273,6 +277,9 @@ class App extends Component {
         }
       },
       showCodeMirror : true,
+
+      // Autocomplete-specific persistent state
+      autocompleteResolvedIdentifiers: [],
 
       // Configure the 3d force directed graph visualization.
       visMode : '3D',
@@ -1147,6 +1154,65 @@ class App extends Component {
           });
         }
       )
+  }
+  /**
+   * Query name-resolution-sri to resolve ontological identifiers from concept names.
+   * For example, go from "asthma" -> ["MONDO:XXX", "MONDO:YYY", "DOID:ZZZ"]
+   * 
+   * As a side-effect, it caches these values in `state.autocompleteResolvedIdentifiers`
+   * for use in autocomplete tooltips.
+   * 
+   * @param {string} conceptValue - The value of the concept, e.g., "asthma" or "asth". If this param is a less than two characters, the method will return an empty object.
+   * @param {string} conceptType - The concept itself, e.g., "disease" or "chemical_substance"
+   * @param {number} [resultLimit=50] - Limit the number of identifiers that will be returned from a concept value. The actual number of results returned by the method will be equal to or less than this after type filtratiion.
+   * 
+   * @throws {TypeError} Failure to fetch from APIs. Should be handled properly by caller.
+   * @private
+   */
+  async _resolveIdentifiersFromConcept(conceptValue, conceptType, resultLimit=50) {
+    // Short strings are not well-supported by the name resolution API, so return no results.
+    if (conceptValue.length <= 2) return {};
+    const args = {
+      limit: resultLimit,
+      // offset: resultOffset,
+      string: conceptValue
+    };
+    const res = await fetch(this.nameResolutionURL + '/lookup?' + qs.stringify(args), {
+      method: "POST"
+    });
+    /*
+    interface NameResolutions {
+      [curie: string]: string[]
+    }
+    Where the strings in the array are names, i.e. {'MONDO:XXX': ["Asthma", "Asthmas", "Bronchial asthma", ...], ... }
+    */
+    const nameResolutions = await res.json();
+    // Now that we have name resolutions, we need to go through and only take the ones that are the same type as conceptType.
+    // For example, the conceptValue "a" could yield both "Asthma" (disease) and "Atrazine" (chemical_substance), but we only want diseases.
+    const filtered = {};
+    for (let i=0; i<Object.keys(nameResolutions).length; i++) {
+      const curie = Object.keys(nameResolutions)[i];
+      const nodeNormResult = await (await fetch(
+        this.nodeNormalizationURL + '/get_normalized_nodes?' + qs.stringify({ curie })
+      )).json();
+      // nodeNormResults will return an object with only one key (`curie`) since we only query with one curie.
+      const result = nodeNormResult[curie];
+      if (result !== null) {
+        // The node normalization API doesn't support all curies that can be returned by the name resolution API.
+        // Unsupported curies will return a null object.
+        const isSameType = result["type"].some(type => this._categoryToType(type) === conceptType);
+        const includedCuries = Object.keys(filtered);
+        const included = result["equivalent_identifiers"].some(({ identifier }) => includedCuries.includes(identifier));
+        if (isSameType && !included) filtered[curie] = {
+          // Node normalization returns its "preferred" label for the curie
+          preferredLabel: result["id"]["label"],
+          // Name resolutions also returns a whole bunch of synonyms for the same curie
+          otherLabels: nameResolutions[curie]
+        };
+      }
+    }
+    return filtered;
+    
   }
   /**
    * Get the valid options in the `from` clause and their respective `reasoner` values

@@ -32,6 +32,8 @@ export default function autoComplete () {
  // // Adjust the position after trimming to be on the correct char.
  // pos.ch = splitLines[splitLines.length-1].length;
 
+ const isAutocompletionClosed = () => codeMirror.state.completionActive === null;
+
  const setHint = function(options, noResultsTip) {
    if (typeof noResultsTip === 'undefined') noResultsTip = true;
    if (noResultsTip && options.length === 0) {
@@ -457,13 +459,7 @@ export default function autoComplete () {
          }
          const endingQuote = currentReasonerArray[currentReasonerArray.length - 1][0];
          const currentReasoner = currentReasonerArray[currentReasonerArray.length - 1][1];
-         // The select statement must be the first statement in the block, but thorough just in case.
-         // We also want to filter out whitespace that would be detected as a token.
-         const selectStatement = block.filter((statement) => statement[0] === "select")[0].filter((token) => {
-           return typeof token !== "string" || token.match(/\s/) === null;
-         });
-         // Don't want the first token ("select")
-         const tokens = selectStatement.slice(1);
+         const tokens = parseTokensFromSelect(block);
 
          let validReasoners = [];
 
@@ -532,7 +528,66 @@ export default function autoComplete () {
          setHint(validReasonerValues);
        }
        else if (statementType === 'where') {
-
+         let whereBody = lastStatement[1];
+         // Just "WHERE" -> suggest concepts in the select statement
+         if (whereBody === undefined) {
+           whereBody = [""];
+         }
+         if (whereBody.length === 1) {
+          const [whereConcept] = whereBody;
+          const tokens = parseTokensFromSelect(block);
+          // Concepts (node selectors) are every 2n index, starting from n=0, i.e. 0, 2, 4, ...
+          // while edges are every 2n+1 index, i.e. 1, 3, 5, ...
+          // - For example, select disease->phenotypic feature would return tokens ['disease', '->', 'phenotypic_feature']
+          //   and return concepts ['disease', 'phenotypic_feature'].
+          // Then filter concepts to only those that start with the current text
+          const concepts = tokens.filter((token, i) => i % 2 === 0).filter((concept) => concept.startsWith(whereConcept));
+          const hints = concepts.map((concept) => ({
+            displayText: concept,
+            // text: concept + `="`,
+            text: concept,
+            replaceText: whereConcept
+          }));
+          setHint(hints);
+         }
+         else if (whereBody.length === 2 || whereBody.length === 3) {
+           let [ whereConcept, equals, whereValueFull ] = whereBody;
+           // If there is no value/open quotes, e.g. `disease=`, change it to `disease="`
+           if (whereValueFull === undefined) {
+             whereValueFull = [`"`, ""];
+           } else if (typeof whereValueFull === "string") {
+             // A completed where statement, with opening and closing quotes, e.g. `where disease="MONDO:XXX"`
+             return;
+           }
+           const [ openQuote, whereValue ] = whereValueFull;
+           // Get possible values for this concept.
+           // Note that a side-effect of this function is that it automatically stores the results within App state for autocomplete purposes.
+           // Also note that this function will always return empty when whereValue is an empty string (due to API limitations)
+           try {
+            const maxResults = 10;
+            setLoading(true);
+            const possibleValuesFull = await this._resolveIdentifiersFromConcept(whereValue, whereConcept, 50);
+            if (isAutocompletionClosed()) {
+              // If the autocompletion was closed while results were loading, then don't show the results.
+              return;
+            }
+            setLoading(false);
+            // resultLimit limits the number of results that can be returned by name resolution (typeless) but these results are then
+            // culled by type-checking them, meaning there'll be much less than `resultLimit` results. Thus, we'll use a very high
+            // resultLimit to ensure an adequate number of type-checked results are returned and then only use the first few of them.
+            const possibleValues = Object.fromEntries(Object.entries(possibleValuesFull).slice(0, maxResults));
+            const hints = Object.entries(possibleValues).map(([curie, labels]) => ({
+              displayText: labels.preferredLabel,
+              text: curie,
+              replaceText: whereValue
+            }));
+            setHint(hints);
+           } catch (e) {
+            // Handle fetch requests to the APIs failing.
+            setError('Error', 'API request failed', [{message: e.message, details: e.stack}]);
+           }
+           
+         }
        }
        }
        catch (e) {
@@ -545,4 +600,15 @@ export default function autoComplete () {
        setError('Error', 'Error', [{message: error.message, details: error.stack}]);
      }
    });
+}
+
+function parseTokensFromSelect(block) {
+  // The select statement must be the first statement in the block, but thorough just in case.
+  // We also want to filter out whitespace that would be detected as a token.
+  const selectStatement = block.filter((statement) => statement[0] === "select")[0].filter((token) => {
+    return typeof token !== "string" || token.match(/\s/) === null;
+  });
+  // Don't want the first token ("select")
+  const concepts = selectStatement.slice(1);
+  return concepts;
 }
