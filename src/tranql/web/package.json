@@ -18,6 +18,7 @@
     "file-saver": "^2.0.2",
     "filepond": "^4.29.1",
     "filepond-plugin-file-validate-type": "^1.2.4",
+    "gamma-viewer-web": "^0.1.1",
     "js-yaml": "^3.13.1",
     "json5": "^2.2.0",
     "jsonpath": "^1.0.2",
