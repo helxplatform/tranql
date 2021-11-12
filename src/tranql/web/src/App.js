@@ -55,19 +55,17 @@ import 'rc-slider/assets/index.css';
 import "react-table/react-table.css";
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { Controlled as CodeMirror } from 'react-codemirror2';
+import { getCurieFromCMToken } from './codemirror-tooltip-extension/text-hover.js';
 import 'codemirror/mode/sql/sql';
 import 'codemirror/addon/hint/show-hint.css'; // without this css hints won't show
 import './App.css';
 import 'abortcontroller-polyfill/dist/polyfill-patch-fetch.js';
-import * as CodeMirrorBackend from 'codemirror';
 
 /* Setup codemirror */
 require('create-react-class');
 require('codemirror/addon/hint/show-hint');
 require('codemirror/addon/hint/sql-hint');
 require('codemirror/lib/codemirror.css');
-
-// CodeMirrorBackend.defineExtension("hoverTooltip",TooltipExtension);
 
 // eslint-disable-next-line
 String.prototype.unquoted = function (){return this.replace (/(^")|("$)/g, '')}
@@ -1224,13 +1222,38 @@ class App extends Component {
         };
       }
     }
+    this._updateResolvedIdentifiers(filtered);
+    return filtered;
+  }
+  /**
+   * Very similar to `_resolveIdentifiersFromConcept`, except that is designed for use with a curie instead of a name & biolink type.
+   * This is made to be used so that whenever a user types a curie directly into the query, it can automatically resolve the English name for them.
+   * 
+   */
+  async _resolveIdentifiersFromCurie(curie) {
+    const nodeNormResult = await (await fetch(
+      this.nodeNormalizationURL + '/get_normalized_nodes?' + qs.stringify({ curie })
+    )).json();
+    const result = nodeNormResult[curie];
+
+    const results = {};
+    if (result !== null) {
+      results[curie] = {
+        preferredLabel: result["id"]["label"],
+        preferredCurie: result["id"]["identifier"],
+        // Not really necessary to query name-resolution for this method's use case.
+        otherLabels: [result["id"]["label"]],
+        equivalentIdentifiers: result["equivalent_identifiers"]
+      };
+    }
+    this._updateResolvedIdentifiers(results);
+    return results;
+  }
+  _updateResolvedIdentifiers(results) {
     // Add results to the cache.
-    this._autocompleteResolvedIdentifiers = { ...this._autocompleteResolvedIdentifiers, ...filtered };
+    this._autocompleteResolvedIdentifiers = { ...this._autocompleteResolvedIdentifiers, ...results };
     // Update codemirror tooltips with new cached results.
     this._codemirror.state.resolvedIdentifiers = this._autocompleteResolvedIdentifiers;
-    // Return results.
-    return filtered;
-    
   }
   /**
    * Get the valid options in the `from` clause and their respective `reasoner` values
@@ -2379,16 +2402,24 @@ class App extends Component {
                                  cache={this._cache}
                                  setCode={this._updateCode}/>*/}
                   <CodeMirror editorDidMount={(editor)=>{this._codemirror = editor;}}
-                  className="query-code"
-                  value={this.state.code}
-                  onBeforeChange={(editor, data, code) => this._updateCode(code)}
-                  onChange={(editor) => {
-                    if (editor.state.completionActive) {
-                      this._codeAutoComplete();
-                    }
-                  }}
-                  options={this.state.codeMirrorOptions}
-                  autoFocus={true} />
+                              className="query-code"
+                              value={this.state.code}
+                              onBeforeChange={(editor, data, code) => this._updateCode(code)}
+                              onChange={(editor) => {
+                                if (editor.state.completionActive) {
+                                  this._codeAutoComplete();
+                                }
+                                const currentToken = editor.getTokenAt(editor.getCursor());
+                                if (currentToken.type === "string" && currentToken.string.includes(":")) {
+                                  // It really doesn't need to be a curie here, since it'll just return no results,
+                                  // but might as well check if there's a colon to avoid making unnecessary API requests.
+                                  try {
+                                    this._resolveIdentifiersFromCurie(getCurieFromCMToken(currentToken.string));
+                                  } catch {}
+                                }
+                              }}
+                              options={this.state.codeMirrorOptions}
+                              autoFocus={true} />
                 </>
               ) :
               (

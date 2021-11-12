@@ -1,5 +1,13 @@
 import * as CodeMirror from 'codemirror';
 
+export function getCurieFromCMToken(string) {
+   // Cut the starting and ending quotation marks/apostrophes out of the value.
+   let value = string.slice(1);
+   // A string may not necessarily be closed yet, so only remove the last character if it is, in fact, closed.
+   if (value.endsWith(`"`) || value.endsWith(`'`)) value = value.slice(0, -1);
+   return value;
+}
+
 (function() {
   "use strict";
 
@@ -102,11 +110,8 @@ import * as CodeMirror from 'codemirror';
         if (data) {
           var {string, type, start, end } = data.token;
           if (type === "string") {
-            // Cut the starting and ending quotation marks/apostrophes out of the value.
-            let value = string.slice(1);
-            // A string may not necessarily be closed yet, so only remove the last character if it is, in fact, closed.
-            if (value.endsWith(`"`) || value.endsWith(`'`)) value = value.slice(0, -1);
-            // Check if the value is a curie that is cached.
+           const value = getCurieFromCMToken(string);
+            // Check if the value is a curie that is cached. If so, add a tooltip with the curie's English label.
             if (cm.state.resolvedIdentifiers && cm.state.resolvedIdentifiers[value]) {
               console.log(cm.state.resolvedIdentifiers[value]);
               html = cm.state.resolvedIdentifiers[value].preferredLabel;
