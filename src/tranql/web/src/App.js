@@ -46,7 +46,7 @@ import LinkExaminer from './LinkExaminer.js';
 import FindTool2 from './FindTool2.js';
 import Message from './Message.js';
 import Chain from './Chain.js';
-import autoComplete from './autocomplete.js';
+import autoComplete, { TooltipExtension } from './autocomplete.js';
 import ContextMenu from './ContextMenu.js';
 import GraphSerializer from './GraphSerializer.js';
 import { RenderInit, RenderSchemaInit, IdFilter, LegendFilter, LinkFilter, NodeFilter, ReasonerFilter, SourceDatabaseFilter, CurvatureAdjuster } from './Render.js';
@@ -59,10 +59,15 @@ import 'codemirror/mode/sql/sql';
 import 'codemirror/addon/hint/show-hint.css'; // without this css hints won't show
 import './App.css';
 import 'abortcontroller-polyfill/dist/polyfill-patch-fetch.js';
+import * as CodeMirrorBackend from 'codemirror';
+
+/* Setup codemirror */
 require('create-react-class');
 require('codemirror/addon/hint/show-hint');
 require('codemirror/addon/hint/sql-hint');
 require('codemirror/lib/codemirror.css');
+
+// CodeMirrorBackend.defineExtension("hoverTooltip",TooltipExtension);
 
 // eslint-disable-next-line
 String.prototype.unquoted = function (){return this.replace (/(^")|("$)/g, '')}
@@ -269,17 +274,15 @@ class App extends Component {
       // Set up CodeMirror settings.
       codeMirrorOptions : {
         lineNumbers: true,
-        mode: 'text/x-pgsql', //'text/x-pgsql',
+        mode: 'text/x-mysql', //'text/x-pgsql',
         tabSize: 2,
         readOnly: false,
         extraKeys: {
           'Ctrl-Space': this._codeAutoComplete
-        }
+        },
+        textHover: true
       },
       showCodeMirror : true,
-
-      // Autocomplete-specific persistent state
-      autocompleteResolvedIdentifiers: [],
 
       // Configure the 3d force directed graph visualization.
       visMode : '3D',
@@ -384,6 +387,9 @@ class App extends Component {
 
       //showAnswerViewer : true
     };
+
+    // This is a cache that stores results from `this._resolveIdentifiersFromConcept` for use in codemirror tooltips.
+    this._autocompleteResolvedIdentifiers = {};
 
     /**
      * We want to reset the interval if user highlights again. Stores `id`:`interval` Structure was too complicated so it is now separated into two objects.
@@ -1202,15 +1208,27 @@ class App extends Component {
         // Unsupported curies will return a null object.
         const isSameType = result["type"].some(type => this._categoryToType(type) === conceptType);
         const includedCuries = Object.keys(filtered);
-        const included = result["equivalent_identifiers"].some(({ identifier }) => includedCuries.includes(identifier));
-        if (isSameType && !included) filtered[curie] = {
+        const includedEquivalentIdentifiers = result["equivalent_identifiers"].filter(({ identifier }) => includedCuries.includes(identifier));
+        if (includedEquivalentIdentifiers.length > 0) {
+          includedEquivalentIdentifiers.forEach((equivIdent) => {
+          });
+        }
+        else if (isSameType) filtered[curie] = {
           // Node normalization returns its "preferred" label for the curie
           preferredLabel: result["id"]["label"],
+          // Node normalization returns its "preferred" curie for the term
+          preferredCurie: result["id"]["identifier"],
           // Name resolutions also returns a whole bunch of synonyms for the same curie
-          otherLabels: nameResolutions[curie]
+          otherLabels: nameResolutions[curie],
+          equivalentIdentifiers: result["equivalent_identifiers"]
         };
       }
     }
+    // Add results to the cache.
+    this._autocompleteResolvedIdentifiers = { ...this._autocompleteResolvedIdentifiers, ...filtered };
+    // Update codemirror tooltips with new cached results.
+    this._codemirror.state.resolvedIdentifiers = this._autocompleteResolvedIdentifiers;
+    // Return results.
     return filtered;
     
   }
