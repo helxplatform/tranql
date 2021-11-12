@@ -18,6 +18,10 @@ export default function autoComplete () {
  // https://github.com/JedWatson/react-codemirror/issues/52
  var codeMirror = this._codemirror;
 
+ // See field declaration in App.js for explanation of Symbol usage.
+ const autoCompleteInstance = Symbol();
+ this._autoCompleteInstance = autoCompleteInstance;
+
  // hint options for specific plugin & general show-hint
  // 'tables' is sql-hint specific
  // 'disableKeywords' is also sql-hint specific, and undocumented but referenced in sql-hint plugin
@@ -37,9 +41,11 @@ export default function autoComplete () {
  // // Adjust the position after trimming to be on the correct char.
  // pos.ch = splitLines[splitLines.length-1].length;
 
- const isAutocompletionClosed = () => codeMirror.state.completionActive === null;
+ const isAutocompletionClosed = () => this._autoCompleteInstance !== autoCompleteInstance;
 
  const setHint = function(options, noResultsTip) {
+   // Prevent writing from stale calls.
+   if (isAutocompletionClosed()) return;
    if (typeof noResultsTip === 'undefined') noResultsTip = true;
    if (noResultsTip && options.length === 0) {
      options.push({
@@ -104,6 +110,8 @@ export default function autoComplete () {
  }
 
  const setError = (resultText, status, errors, resultOptions) => {
+   // Prevent writing from stale calls.
+   if (isAutocompletionClosed()) return;
    if (typeof resultOptions === "undefined") resultOptions = {};
    codeMirror.showHint({
      hint: function() {
@@ -129,6 +137,8 @@ export default function autoComplete () {
  }
 
  const setLoading = function(loading) {
+   // Prevent writing from stale calls.
+   if (isAutocompletionClosed()) return;
    if (loading) {
      // text property has to be String('') because when it is '' (falsey) it refuses to display it.
      codeMirror.showHint({
@@ -572,10 +582,6 @@ export default function autoComplete () {
             const maxResults = 10;
             setLoading(true);
             const possibleValuesFull = await this._resolveIdentifiersFromConcept(whereValue, whereConcept, 50);
-            if (isAutocompletionClosed()) {
-              // If the autocompletion was closed while results were loading, then don't show the results.
-              return;
-            }
             setLoading(false);
             // resultLimit limits the number of results that can be returned by name resolution (typeless) but these results are then
             // culled by type-checking them, meaning there'll be much less than `resultLimit` results. Thus, we'll use a very high

@@ -113,7 +113,6 @@ export function getCurieFromCMToken(string) {
            const value = getCurieFromCMToken(string);
             // Check if the value is a curie that is cached. If so, add a tooltip with the curie's English label.
             if (cm.state.resolvedIdentifiers && cm.state.resolvedIdentifiers[value]) {
-              console.log(cm.state.resolvedIdentifiers[value]);
               html = cm.state.resolvedIdentifiers[value].preferredLabel;
             }
           }

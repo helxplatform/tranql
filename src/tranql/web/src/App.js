@@ -425,6 +425,9 @@ class App extends Component {
     // Fetch controllers
     this._queryController = new window.AbortController();
     this._autoCompleteController = new window.AbortController();
+    // This is a tracking symbol used to detect if a new autocomplete call has been opened.
+    // It it used to prevent stale autocompletion calls from writing to the codemirror state.
+    this._autoCompleteInstance = Symbol();
 
     this._OVERLAY_X = 0;
     this._OVERLAY_Y = 0;
@@ -1251,7 +1254,7 @@ class App extends Component {
   }
   _updateResolvedIdentifiers(results) {
     // Add results to the cache.
-    this._autocompleteResolvedIdentifiers = { ...this._autocompleteResolvedIdentifiers, ...results };
+    this._autocompleteResolvedIdentifiers = { ...results, ...this._autocompleteResolvedIdentifiers };
     // Update codemirror tooltips with new cached results.
     this._codemirror.state.resolvedIdentifiers = this._autocompleteResolvedIdentifiers;
   }
