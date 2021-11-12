@@ -69,12 +69,12 @@ export default function autoComplete () {
              option.from = { line : from.line, ch : from.ch - replaceText.length };
              option.to = { line : to.line, ch : to.ch};
 
-             if (replaceText.length > 0) {
-               const trimmedLines = textToCursorPositionUntrimmed.trimRight().split(/\r\n|\r|\n/);
-               const lastLine = trimmedLines[trimmedLines.length-1];
-               option.from.line = trimmedLines.length - 1;
-               option.from.ch = lastLine.length - replaceText.length;
-             }
+            //  if (replaceText.length > 0) {
+            //    const trimmedLines = textToCursorPositionUntrimmed.trimRight().split(/\r\n|\r|\n/);
+            //    const lastLine = trimmedLines[trimmedLines.length-1];
+            //    option.from.line = trimmedLines.length - 1;
+            //    option.from.ch = lastLine.length - replaceText.length;
+            //  }
 
 
              delete option.replaceText;
