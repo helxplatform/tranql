@@ -14,7 +14,7 @@ import { IoIosArrowDropupCircle, IoIosArrowDropdownCircle, IoIosSwap, IoMdBrowse
 import {
   FaCog, FaDatabase, FaQuestionCircle, FaSearch, FaHighlighter, FaEye,
   FaSpinner, FaMousePointer, FaTimes, FaFolderOpen, FaFileImport, FaFileExport,
-  FaArrowsAlt, FaTrash, FaPlayCircle, FaTable, FaCopy, FaPython
+  FaArrowsAlt, FaTrash, FaPlayCircle, FaTable, FaCopy, FaPython, FaFrown
 } from 'react-icons/fa';
 // import { Tab, Tabs, TabList, TabPanel } from 'react-tabs';
 import 'react-confirm-alert/src/react-confirm-alert.css';
@@ -28,7 +28,9 @@ import 'react-notifications/lib/notifications.css';
 import { GridLoader } from 'react-spinners';
 import SplitPane from 'react-split-pane';
 import Cache from './Cache.js';
+import TranQLEmbedded, { EmbedMode } from './TranQLEmbedded.js';
 import AnswerViewer from './AnswerViewer.js';
+import GammaViewer from './GammaViewer.js';
 import QueriesModal from './QueriesModal.js';
 import HistoryViewer from './HistoryViewer.js';
 import BrowseNodeInterface from './BrowseNodeInterface.js';
@@ -39,7 +41,7 @@ import ImportExportModal from './ImportExportModal.js';
 import SettingsModal from './SettingsModal.js';
 import confirmAlert from './confirmAlert.js';
 import highlightTypes from './highlightTypes.js';
-import { shadeColor, adjustTitle, hydrateState, formatBytes } from './Util.js';
+import { shadeColor, adjustTitle, hydrateState, formatBytes, debounce } from './Util.js';
 import { AppToolbar, Tool, /*ToolGroup*/ } from './Toolbar.js';
 import LinkExaminer from './LinkExaminer.js';
 // import FindTool from './FindTool.js';
@@ -108,6 +110,8 @@ class App extends Component {
     this._getReasonerURLs = this._getReasonerURLs.bind (this);
     this._updateCode = this._updateCode.bind (this);
     this._executeQuery = this._executeQuery.bind(this);
+    // For usage where the query is auto-executed on change (e.g., when embedded).
+    this._debouncedExecuteQuery = debounce(this._executeQuery, 1000);
     this._abortQuery = this._abortQuery.bind(this);
     this._configureMessage = this._configureMessage.bind (this);
     this._translateGraph = this._translateGraph.bind (this);
@@ -124,6 +128,11 @@ class App extends Component {
     this.__highlightTypes = highlightTypes.bind(this);
 
     this._setConnectionExaminerActive = this._setConnectionExaminerActive.bind(this);
+
+    // Non-visualization components
+    this._renderCodemirror = this._renderCodemirror.bind (this);
+    this._renderBanner = this._renderBanner.bind (this);
+    this._renderAnswerViewer = this._renderAnswerViewer.bind (this);
 
     // The visualization
     this._renderForceGraph = this._renderForceGraph.bind (this);
@@ -218,6 +227,14 @@ class App extends Component {
 
     // Cache graphs locally using IndexedDB web component.
     this._cache = new Cache ();
+
+    /**
+     * Specifies the way in which the embedded app should render (specified by the query string argument "embed").
+     * 
+     * Related: the property `embedded` is functionally equivalent to `this.embedMode !== EmbedMode.NONE`, which abstracts
+     * away from the embed mode functionality.
+     */
+    this.embedMode = EmbedMode.NONE;
 
     // Configure initial state.
     this.state = {
@@ -439,12 +456,16 @@ class App extends Component {
     // Promises
     this.schemaPromise = new Promise(()=>{});
   }
+  get embedded() {
+    return this.embedMode !== EmbedMode.NONE;
+  }
   /**
    * Updates the queries contained within the cache viewer modal.
    *
    */
   _updateCacheViewer () {
     const updateQueryTitle = (query, queryTitle) => {
+      if (!this._cachedQueriesModal.current) return;
       query.data.title = queryTitle;
       this._cache.db.cache.update(query.id,query);
       /* Gets a bit messy here but since it's directly modifying a property of the object, and these objects are all formatted and stored in the ref's state, we have to work around it a bit. */
@@ -531,8 +552,8 @@ class App extends Component {
    * @private
    */
   _setSchemaViewerActive (active) {
-    this._browseNodeInterface.current.hide();
-    this._linkExaminer.current.hide();
+    if (this._browseNodeInterface.current) this._browseNodeInterface.current.hide();
+    if (this._linkExaminer.current) this._linkExaminer.current.hide();
     this._closeObjectViewer();
 
     // Don't set state, thereby reloading the graph, if the schema viewer isn't enabled
@@ -1264,12 +1285,17 @@ class App extends Component {
    * @private
    */
   async _getReasonerURLs () {
-    const res = await fetch(this.tranqlURL + '/tranql/reasonerURLs', {
-      method: "GET",
-    })
-    const reasonerURLs = await res.json();
+    try {
+      const res = await fetch(this.tranqlURL + '/tranql/reasonerURLs', {
+        method: "GET",
+      })
+      const reasonerURLs = await res.json();
 
-    return reasonerURLs;
+      return reasonerURLs;
+    } catch {
+      // Fetch failed.
+      return [];
+    }
   }
   /**
    * Get the concept model and stores as state.
@@ -1506,6 +1532,19 @@ class App extends Component {
    * @private
    */
   _updateFg () {
+    if (this.fg) {
+      // Performing actions such as dragging a node will reset fg.controls().enabled back to true automatically,
+      // thus it's necessary to hook into the TrackballControls and make sure that they're immediately re-disabled.
+      if (this.embedded) {
+        const controls = this.fg.controls();
+        controls.enabled = false;
+        const _update = controls.update.bind(controls);
+        controls.update = (...args) => {
+          _update(...args);
+          if (controls.enabled === true) controls.enabled = false;
+        }
+      }
+    }
     // let graph = this.state.schemaViewerEnabled && this.state.schemaViewerActive ? this.state.schema : this.state.graph;
   }
   /**
@@ -1597,8 +1636,97 @@ class App extends Component {
   _fgAdjustCharge (charge) {
     if (this.fg) {
       this.fg.d3Force ('charge').strength(charge);
-      this.fg.refresh ();
+      if (this.fg.refresh) this.fg.refresh ();
     }
+  }
+  /**
+   * Render the Answer Viewer modal.
+   * 
+   */
+  _renderAnswerViewer (customProps) {
+    return (
+      <GammaViewer data={this.state.message}
+                   show={this.state.activeModal==="AnswerViewerModal"}
+                   onHide={() => this._setActiveModal(null)}
+                   {...customProps}/>
+    );
+  }
+  /**
+   * Renders the App banner/header element.
+   * 
+   */
+  _renderBanner() {
+    return (
+      <header className="App-header" >
+        <div id="headerContainer" className="no-select">
+          <p style={{display:"inline-block",flex:1}}>TranQL</p>
+          <Message activeModal={this.state.activeModal} ref={this._messageDialog} />
+          <GridLoader
+            css={spinnerStyleOverride}
+            id={"spinner"}
+            sizeUnit={"px"}
+            size={6}
+            color={'#2cbc12'}
+            loading={this.state.loading && (this.state.schemaViewerActive || !this.state.schemaViewerEnabled)} />
+          {
+            !this.state.toolbarEnabled &&
+              <Button id="navModeButton"
+                      outline
+                      color="primary" onClick={() => {this._setNavMode(!this.state.navigateMode); this._setSelectMode(!this.state.selectMode)}}>
+                { this.state.navigateMode && (this.state.visMode === '3D' || this.state.visMode === '2D') ? "Navigate" : "Select" }
+              </Button>
+          }
+          {
+            !this.state.loading ? (
+              <Button id="runButton"
+                      outline
+                      color="success" onClick={this._executeQuery}>
+                Run
+              </Button>
+            ) : (
+              <Button id="abortButton"
+                      outline
+                      color="danger" onClick={this._abortQuery}>
+                Cancel
+              </Button>
+            )
+          }
+          <div id="appControlContainer" style={{display:(this.state.toolbarEnabled ? "none" : "")}}>
+            <FaCog data-tip="Configure application settings" id="settings" className="App-control" onClick={() => this._setActiveModal("SettingsModal")} />
+            <FaPlayCircle data-tip="Answer Navigator - see each answer, its graph structure, links, knowledge source and literature provenance" id="answerViewer" className="App-control" onClick={this._handleShowAnswerViewer} />
+          </div>
+        </div>
+      </header>
+    );
+  }
+  /**
+   * Renders the codemirror query element.
+   * 
+   * @private
+   */
+  _renderCodemirror() {
+    return (
+      <CodeMirror editorDidMount={(editor)=>{this._codemirror = editor;}}
+                  className="query-code"
+                  value={this.state.code}
+                  onBeforeChange={(editor, data, code) => this._updateCode(code)}
+                  onChange={(editor) => {
+                    if (editor.state.completionActive) {
+                      this._codeAutoComplete();
+                    }
+                    const currentToken = editor.getTokenAt(editor.getCursor());
+                    if (currentToken.type === "string" && currentToken.string.includes(":")) {
+                      // It really doesn't need to be a curie here, since it'll just return no results,
+                      // but might as well check if there's a colon to avoid making unnecessary API requests.
+                      try {
+                        this._resolveIdentifiersFromCurie(getCurieFromCMToken(currentToken.string));
+                      } catch {}
+                    }
+                    if (this.embedded) this._debouncedExecuteQuery();
+                  }}
+                  options={this.state.codeMirrorOptions}
+                  autoFocus={true} />
+    );
   }
   /**
    * Render the force directed graph in either 2D or 3D rendering modes.
@@ -1615,6 +1743,8 @@ class App extends Component {
       height:this.state.graphHeight,
       linkAutoColorBy:"type",
       nodeAutoColorBy:"type",
+      linkDirectionalArrowLength: 3.5,
+      linkDirectionalArrowRelPos: 1,
       d3AlphaDecay:0.2,
       strokeWidth:10,
       linkWidth:2,
@@ -1703,6 +1833,12 @@ class App extends Component {
       return <ForceGraphVR {...props} />
   }
   _handleShowAnswerViewer () {
+    if (this.state.message && this.state.message.message) {
+      this._setActiveModal("AnswerViewerModal");
+    }
+  }
+  /*
+  _handleShowAnswerViewer () {
     console.log (this._answerViewer);
     if (this.state.message) {
       var message = this.state.message;
@@ -1740,6 +1876,7 @@ class App extends Component {
       });
     }
   }
+  */
   /**
    * Handles error messages
    *
@@ -1750,6 +1887,7 @@ class App extends Component {
    * @private
    */
   _handleMessageDialog (title, message, details) {
+    if (!this._messageDialog.current) return;
     if (!Array.isArray(message)) {
       message = [{
         message: message,
@@ -1773,6 +1911,9 @@ class App extends Component {
    * @private
    */
   _handleUpdateSettings (e) {
+    // We don't want settings to be modified when the app is embedded.
+    if (this.embedded) return;
+
     var targetName = e.currentTarget.name;
     console.log ("--update settings: " + targetName);
     if (targetName === 'dynamicIdResolution') {
@@ -1783,7 +1924,7 @@ class App extends Component {
       forceGraphOpts.enableNodeDrag = e.currentTarget.checked;
       this.setState({ forceGraphOpts });
       localStorage.setItem('forceGraphOpts', JSON.stringify (forceGraphOpts));
-      this.fg.refresh();
+      if (this.fg.refresh) this.fg.refresh();
     } else if (targetName === 'useToolCursor') {
       this.setState ({ useToolCursor : e.currentTarget.checked });
       localStorage.setItem (targetName, JSON.stringify (e.currentTarget.checked));
@@ -1966,9 +2107,9 @@ class App extends Component {
       );
   }
   _closeObjectViewer() {
-    if (this.state.objectViewerEnabled) {
+    if (this.state.objectViewerEnabled && this._graphSplitPane.current) {
       let width = this._graphSplitPane.current.splitPane.offsetWidth;
-        this._graphSplitPane.current.setState({ draggedSize : width, pane1Size : width , position : width });
+      this._graphSplitPane.current.setState({ draggedSize : width, pane1Size : width , position : width });
       this._updateGraphSize(width);
       this.setState({ objectViewerSelection : null });
     }
@@ -2040,6 +2181,7 @@ class App extends Component {
    * @private
    */
   _updateDimensions() {
+    if (!this._graphSplitPane.current) return;
     let prevWinWidth = this._graphSplitPane.current.state.prevWinWidth;
     let prevWinHeight = this._tableSplitPane.current.state.prevWinHeight;
     if (prevWinWidth === undefined) prevWinWidth = window.innerWidth;
@@ -2193,10 +2335,44 @@ class App extends Component {
     const params = qs.parse(window.location.search, { ignoreQueryPrefix : true });
 
     const tranqlQuery = params.q || params.query;
+    const embedded = params.embed;
     if (tranqlQuery !== undefined) {
-      this._updateCode(tranqlQuery);
-      this.setState({}, () => {
-        this._executeQuery();
+      this._queryExecOnLoad = tranqlQuery;
+    }
+    // i.e. "?embed=true" or "?embed"
+    if (embedded !== undefined && embedded !== null) {
+      // Note that `this.embedded` is a derived property of embedMode (without a setter) so there is no need to set it here.
+      switch (embedded.toLowerCase()) {
+        case "full":
+          this.embedMode = EmbedMode.FULL;
+          break;
+        case "graph":
+        case "simple":
+        case "true":
+        case "":
+          this.embedMode = EmbedMode.SIMPLE;
+          break;
+        case "false":
+          break;
+        default:
+          console.error("Unknown embed type:", embedded);
+          this.embedMode = EmbedMode.SIMPLE;
+          break;
+      }
+      // Disable the cache when embedded
+      this.setState({
+        useCache : false
+      });
+      // Disable localStorage on embedded websites. Even though settings/cache is disabled,
+      // some other parts of the app also write/read from localStorage, for example:
+      //   when a query is executed, it stores the query in local stoarge under the key `code`.
+      window.localStorage.__proto__ = Object.create({
+        setItem: () => {},
+        removeItem: () => {},
+        key: () => {},
+        getItem: () => {},
+        removeItem: () => {},
+        length: 0
       });
     }
   }
@@ -2221,12 +2397,11 @@ class App extends Component {
     this._updateDimensionsFunc = this._updateDimensions;
     window.addEventListener('resize', this._updateDimensionsFunc);
 
-    // Hydrate persistent state from local storage
-    this._hydrateState ();
-
     // Handle query string parameters (mini-router implementation)
     // & hydrate state accordingly
     this._handleQueryString ();
+    // Hydrate persistent state from local storage
+    if (!this.embedded) this._hydrateState ();
 
     // Populate the cache viewer
     this._updateCacheViewer ();
@@ -2239,6 +2414,14 @@ class App extends Component {
     this._getSchema ();
 
     this._updateGraphSize(document.body.offsetWidth);
+
+    if (this._queryExecOnLoad !== undefined) {
+      // After initial loading is complete, execute the query specified in the URL's query string if there is one.
+      this._updateCode(this._queryExecOnLoad);
+      this.setState({}, () => {
+        this._executeQuery();
+      });
+    }
 
     this.setState({}, () => {
       if (this.fg) {
@@ -2260,7 +2443,15 @@ class App extends Component {
   }
 
   render() {
-    // Render it.
+    // Render just the graph if the app is being embedded
+    if (this.embedded) return <TranQLEmbedded embedMode={this.embedMode}
+                                              graphLoading={this.state.loading}
+                                              graph={this.state.graph}
+                                              renderForceGraph={this._renderForceGraph}
+                                              renderCodemirror={this._renderCodemirror}
+                                              renderAnswerViewer={this._renderAnswerViewer}
+                                              graphRefCallback={(el) => {this.fg = el; this._updateFg ()}}/>;
+    // Render the app
     return (
       <div className="App" id="AppElement">
         <SettingsModal active={this.state.activeModal==="SettingsModal"}
@@ -2349,48 +2540,10 @@ class App extends Component {
                       title={"Cached queries"+(!this.state.useCache?' (cache disabled)':'')}
                       tools={this.state.cachedQueriesModalTools}
                       emptyText=<div style={{fontSize:"17px"}}>You currently have no cached queries.</div>/>
-        <AnswerViewer show={true} ref={this._answerViewer} />
+        {/* <AnswerViewer show={true} ref={this._answerViewer} /> */}
+        {this._renderAnswerViewer()}
         <ReactTooltip place="left"/>
-        <header className="App-header" >
-          <div id="headerContainer" className="no-select">
-            <p style={{display:"inline-block",flex:1}}>TranQL</p>
-            <Message activeModal={this.state.activeModal} ref={this._messageDialog} />
-            <GridLoader
-              css={spinnerStyleOverride}
-              id={"spinner"}
-              sizeUnit={"px"}
-              size={6}
-              color={'#2cbc12'}
-              loading={this.state.loading && (this.state.schemaViewerActive || !this.state.schemaViewerEnabled)} />
-            {
-              !this.state.toolbarEnabled &&
-                <Button id="navModeButton"
-                        outline
-                        color="primary" onClick={() => {this._setNavMode(!this.state.navigateMode); this._setSelectMode(!this.state.selectMode)}}>
-                  { this.state.navigateMode && (this.state.visMode === '3D' || this.state.visMode === '2D') ? "Navigate" : "Select" }
-                </Button>
-            }
-            {
-              !this.state.loading ? (
-                <Button id="runButton"
-                        outline
-                        color="success" onClick={this._executeQuery}>
-                  Run
-                </Button>
-              ) : (
-                <Button id="abortButton"
-                        outline
-                        color="danger" onClick={this._abortQuery}>
-                  Cancel
-                </Button>
-              )
-            }
-            <div id="appControlContainer" style={{display:(this.state.toolbarEnabled ? "none" : "")}}>
-              <FaCog data-tip="Configure application settings" id="settings" className="App-control" onClick={() => this._setActiveModal("SettingsModal")} />
-              <FaPlayCircle data-tip="Answer Navigator - see each answer, its graph structure, links, knowledge source and literature provenance" id="answerViewer" className="App-control" onClick={this._handleShowAnswerViewer} />
-            </div>
-          </div>
-        </header>
+        {this._renderBanner()}
         <div>
           {
             this.state.showCodeMirror ?
@@ -2404,25 +2557,7 @@ class App extends Component {
                                  setActiveModal={this._setActiveModal}
                                  cache={this._cache}
                                  setCode={this._updateCode}/>*/}
-                  <CodeMirror editorDidMount={(editor)=>{this._codemirror = editor;}}
-                              className="query-code"
-                              value={this.state.code}
-                              onBeforeChange={(editor, data, code) => this._updateCode(code)}
-                              onChange={(editor) => {
-                                if (editor.state.completionActive) {
-                                  this._codeAutoComplete();
-                                }
-                                const currentToken = editor.getTokenAt(editor.getCursor());
-                                if (currentToken.type === "string" && currentToken.string.includes(":")) {
-                                  // It really doesn't need to be a curie here, since it'll just return no results,
-                                  // but might as well check if there's a colon to avoid making unnecessary API requests.
-                                  try {
-                                    this._resolveIdentifiersFromCurie(getCurieFromCMToken(currentToken.string));
-                                  } catch {}
-                                }
-                              }}
-                              options={this.state.codeMirrorOptions}
-                              autoFocus={true} />
+                  {this._renderCodemirror()}
                 </>
               ) :
               (

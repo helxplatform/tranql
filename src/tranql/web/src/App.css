@@ -714,6 +714,29 @@ body {
   left:-1.25px;
   background-color:rgb(215,215,215);
 }
+
+/* Embedded style rules */
+.App.embedded .react-codemirror2 {
+  border: 2px solid #f0f0f0;
+}
+.App.embedded .CodeMirror {
+  padding: 0;
+  height: 100% !important;
+}
+.App.embedded .CodeMirror-scroll {
+  height: 100% !important;
+  max-height: 30vh;
+}
+
+/* Gamma Viewer rules */
+body.modal-open > *[role="tooltip"] {
+  /* This is attached to the MuiPaper popup/tooltips used in the answer viewer for filtering.
+   * Since the Gamma Viewer can appear in a Bootstrap modal, and these popups are positioned absolutely relative to the root,
+   * we need to bump up the z-index to ensure they appear above the modal.
+   */
+  z-index: 2000 !important;
+}
+
 @-ms-keyframes spin { 100% { -moz-transform: rotate(360deg); } }
 @-o-keyframes spin { 100% { -moz-transform: rotate(360deg); } }
 @-moz-keyframes spin { 100% { -moz-transform: rotate(360deg); } }

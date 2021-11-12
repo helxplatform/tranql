@@ -26,12 +26,14 @@ let loadedForceGraph;
 // Loaded in "schema loads" test. Same as loadedForceGraph but for schema.
 let loadedSchemaGraph;
 
+
 beforeAll(async () => {
     browser = await puppeteer.launch({
         headless: args.browserMode === BrowserMode.HEADLESS,
         // Intercepting requests causing CORS issues so this needs to be disabled.
         args: [
-            "--disable-web-security"
+            "--disable-web-security",
+            args.sandbox === false ? "--no-sandbox" : ""
         ]
     });
 });
@@ -65,6 +67,19 @@ describe('App', async () => {
      * The header is static and should always render unless something
      * goes seriously wrong.
      */
+    test(
+        "init browser",
+        async () => {
+            if (!browser) browser = await puppeteer.launch({
+                headless: args.browserMode === BrowserMode.HEADLESS,
+                // Intercepting requests causing CORS issues so this needs to be disabled.
+                args: [
+                    "--disable-web-security"
+                ]
+            });
+        },
+        30000
+    );
     test(
         "header renders",
         async () => {
