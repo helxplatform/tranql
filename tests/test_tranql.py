@@ -11,7 +11,7 @@ import yaml
 from tests.mocks import MockHelper
 from tests.mocks import MockMap
 from tests.util import assert_lists_equal, set_mock, ordered
-from tranql.main import TranQL
+from tranql.main import TranQL, TranQLIncompleteParser
 from tranql.tranql_ast import SetStatement, SelectStatement, custom_functions
 from tranql.tranql_schema import SchemaFactory
 from tranql.utils.merge_utils import connect_knowledge_maps, find_all_paths
@@ -322,6 +322,48 @@ def test_parse_query_with_repeated_concept (GraphInterfaceMock, requests_mock):
               ["$.knowledge_graph.nodes.[*].id","as","diagnoses"]
              ]
             ]])
+
+######################################################################################
+# TranQLIncompleteParser tests. For /tranql/parse_incomplete autocompletion endpoint #
+######################################################################################
+def test_parse_incomplete_where_clause(requests_mock):
+    program = """
+select gene->disease
+  from "/schema"
+ where disease="asth
+    """
+    parser = TranQLIncompleteParser (None)
+    parsed = parser.tokenize(program)
+    result = parsed.asList()
+    expected = [
+        [
+            [
+                "select",
+                "gene",
+                "->",
+                "disease",
+                "\n"
+            ],
+            [
+                "from",
+                [
+                    ["/schema"]
+                ]
+            ],
+            [
+                "where",
+                [
+                    "disease",
+                    "=",
+                    [
+                        '"',
+                        "asth"
+                    ]
+                ]
+            ]
+        ]
+    ]
+    assert_lists_equal(result, expected)
 
 #####################################################
 #
