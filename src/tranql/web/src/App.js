@@ -1723,9 +1723,7 @@ class App extends Component {
                     if (currentToken.type === "string" && currentToken.string.includes(":")) {
                       // It really doesn't need to be a curie here, since it'll just return no results,
                       // but might as well check if there's a colon to avoid making unnecessary API requests.
-                      try {
-                        this._resolveIdentifiersFromCurie(getCurieFromCMToken(currentToken.string));
-                      } catch {}
+                      this._resolveIdentifiersFromCurie(getCurieFromCMToken(currentToken.string)).catch(() => {})
                     }
                     if (this.embedded) this._debouncedExecuteQuery();
                   }}
