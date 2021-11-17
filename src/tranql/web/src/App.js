@@ -48,7 +48,7 @@ import LinkExaminer from './LinkExaminer.js';
 import FindTool2 from './FindTool2.js';
 import Message from './Message.js';
 import Chain from './Chain.js';
-import autoComplete from './autocomplete.js';
+import autoComplete, { TooltipExtension } from './autocomplete.js';
 import ContextMenu from './ContextMenu.js';
 import GraphSerializer from './GraphSerializer.js';
 import { RenderInit, RenderSchemaInit, IdFilter, LegendFilter, LinkFilter, NodeFilter, ReasonerFilter, SourceDatabaseFilter, CurvatureAdjuster } from './Render.js';
@@ -57,10 +57,13 @@ import 'rc-slider/assets/index.css';
 import "react-table/react-table.css";
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { Controlled as CodeMirror } from 'react-codemirror2';
+import { getCurieFromCMToken } from './codemirror-tooltip-extension/text-hover.js';
 import 'codemirror/mode/sql/sql';
 import 'codemirror/addon/hint/show-hint.css'; // without this css hints won't show
 import './App.css';
 import 'abortcontroller-polyfill/dist/polyfill-patch-fetch.js';
+
+/* Setup codemirror */
 require('create-react-class');
 require('codemirror/addon/hint/show-hint');
 require('codemirror/addon/hint/sql-hint');
@@ -96,6 +99,8 @@ class App extends Component {
     //this.tranqlURL = window.location.origin;
     //this.tranqlURL = "http://localhost:8001"; // dev only
     this.robokop_url = "https://robokop.renci.org";
+    this.nameResolutionURL = "https://name-resolution-sri.renci.org";
+    this.nodeNormalizationURL = "https://nodenormalization-sri.renci.org/1.2";
     this._contextMenuId = "contextMenuId";
 
     // Query editor support.
@@ -103,7 +108,6 @@ class App extends Component {
     this._getModelConcepts = this._getModelConcepts.bind (this);
     this._getModelRelations = this._getModelRelations.bind (this);
     this._getReasonerURLs = this._getReasonerURLs.bind (this);
-    this._codeAutoComplete = autoComplete.bind(this);
     this._updateCode = this._updateCode.bind (this);
     this._executeQuery = this._executeQuery.bind(this);
     // For usage where the query is auto-executed on change (e.g., when embedded).
@@ -111,6 +115,9 @@ class App extends Component {
     this._abortQuery = this._abortQuery.bind(this);
     this._configureMessage = this._configureMessage.bind (this);
     this._translateGraph = this._translateGraph.bind (this);
+    // Specifically for autocomplete
+    this._codeAutoComplete = autoComplete.bind(this);
+    this._resolveIdentifiersFromConcept = this._resolveIdentifiersFromConcept.bind(this);
 
     // Toolbar
     this._setNavMode = this._setNavMode.bind(this);
@@ -282,12 +289,13 @@ class App extends Component {
       // Set up CodeMirror settings.
       codeMirrorOptions : {
         lineNumbers: true,
-        mode: 'text/x-pgsql', //'text/x-pgsql',
+        mode: 'text/x-mysql', //'text/x-pgsql',
         tabSize: 2,
         readOnly: false,
         extraKeys: {
           'Ctrl-Space': this._codeAutoComplete
-        }
+        },
+        textHover: true
       },
       showCodeMirror : true,
 
@@ -395,6 +403,9 @@ class App extends Component {
       //showAnswerViewer : true
     };
 
+    // This is a cache that stores results from `this._resolveIdentifiersFromConcept` for use in codemirror tooltips.
+    this._autocompleteResolvedIdentifiers = {};
+
     /**
      * We want to reset the interval if user highlights again. Stores `id`:`interval` Structure was too complicated so it is now separated into two objects.
      */
@@ -431,6 +442,9 @@ class App extends Component {
     // Fetch controllers
     this._queryController = new window.AbortController();
     this._autoCompleteController = new window.AbortController();
+    // This is a tracking symbol used to detect if a new autocomplete call has been opened.
+    // It it used to prevent stale autocompletion calls from writing to the codemirror state.
+    this._autoCompleteInstance = Symbol();
 
     this._OVERLAY_X = 0;
     this._OVERLAY_Y = 0;
@@ -1170,6 +1184,107 @@ class App extends Component {
       )
   }
   /**
+   * Query name-resolution-sri to resolve ontological identifiers from concept names.
+   * For example, go from "asthma" -> ["MONDO:XXX", "MONDO:YYY", "DOID:ZZZ"]
+   * 
+   * As a side-effect, it caches these values in `state.autocompleteResolvedIdentifiers`
+   * for use in autocomplete tooltips.
+   * 
+   * @param {string} conceptValue - The value of the concept, e.g., "asthma" or "asth". If this param is a less than two characters, the method will return an empty object.
+   * @param {string} conceptType - The concept itself, e.g., "disease" or "chemical_substance"
+   * @param {number} [resultLimit=50] - Limit the number of identifiers that will be returned from a concept value. The actual number of results returned by the method will be equal to or less than this after type filtratiion.
+   * 
+   * @throws {TypeError} Failure to fetch from APIs. Should be handled properly by caller.
+   * @private
+   */
+  async _resolveIdentifiersFromConcept(conceptValue, conceptType, resultLimit=50) {
+    // Short strings are not well-supported by the name resolution API, so return no results.
+    if (conceptValue.length <= 2) return {};
+    const args = {
+      limit: resultLimit,
+      // offset: resultOffset,
+      string: conceptValue
+    };
+    const res = await fetch(this.nameResolutionURL + '/lookup?' + qs.stringify(args), {
+      method: "POST"
+    });
+    /*
+    interface NameResolutions {
+      [curie: string]: string[]
+    }
+    Where the strings in the array are names, i.e. {'MONDO:XXX': ["Asthma", "Asthmas", "Bronchial asthma", ...], ... }
+    */
+    const nameResolutions = await res.json();
+    // Now that we have name resolutions, we need to go through and only take the ones that are the same type as conceptType.
+    // For example, the conceptValue "a" could yield both "Asthma" (disease) and "Atrazine" (chemical_substance), but we only want diseases.
+    const filtered = {};
+    // The qs library does not seem to support the same type of qs list serialization as is expected by node norm, but URLSearchParams does.
+    const nodeNormArgs = new URLSearchParams();
+    Object.keys(nameResolutions).forEach((curie) => nodeNormArgs.append("curie", curie));
+    // Not entirely sure what this argument does, but it sounds like it merges results which we might not want. Probably inconsequential either way.
+    nodeNormArgs.append("conflate", false);
+    const nodeNormResults = await (await fetch(
+      this.nodeNormalizationURL + '/get_normalized_nodes?' + nodeNormArgs.toString()
+    )).json();
+    for (let i=0; i<Object.keys(nameResolutions).length; i++) {
+      const curie = Object.keys(nameResolutions)[i];
+      // nodeNormResults will return an object with only one key (`curie`) since we only query with one curie.
+      const result = nodeNormResults[curie];
+      if (result !== null) {
+        // The node normalization API doesn't support all curies that can be returned by the name resolution API.
+        // Unsupported curies will return a null object.
+        const isSameType = result["type"].some(type => this._categoryToType(type) === conceptType);
+        const includedCuries = Object.keys(filtered);
+        const includedEquivalentIdentifiers = result["equivalent_identifiers"].filter(({ identifier }) => includedCuries.includes(identifier));
+        if (includedEquivalentIdentifiers.length > 0) {
+          includedEquivalentIdentifiers.forEach((equivIdent) => {
+          });
+        }
+        else if (isSameType) filtered[curie] = {
+          // Node normalization returns its "preferred" label for the curie
+          preferredLabel: result["id"]["label"],
+          // Node normalization returns its "preferred" curie for the term
+          preferredCurie: result["id"]["identifier"],
+          // Name resolutions also returns a whole bunch of synonyms for the same curie
+          otherLabels: nameResolutions[curie],
+          equivalentIdentifiers: result["equivalent_identifiers"]
+        };
+      }
+    }
+    this._updateResolvedIdentifiers(filtered);
+    return filtered;
+  }
+  /**
+   * Very similar to `_resolveIdentifiersFromConcept`, except that is designed for use with a curie instead of a name & biolink type.
+   * This is made to be used so that whenever a user types a curie directly into the query, it can automatically resolve the English name for them.
+   * 
+   */
+  async _resolveIdentifiersFromCurie(curie) {
+    const nodeNormResult = await (await fetch(
+      this.nodeNormalizationURL + '/get_normalized_nodes?' + qs.stringify({ curie })
+    )).json();
+    const result = nodeNormResult[curie];
+
+    const results = {};
+    if (result !== null) {
+      results[curie] = {
+        preferredLabel: result["id"]["label"],
+        preferredCurie: result["id"]["identifier"],
+        // Not really necessary to query name-resolution for this method's use case.
+        otherLabels: [result["id"]["label"]],
+        equivalentIdentifiers: result["equivalent_identifiers"]
+      };
+    }
+    this._updateResolvedIdentifiers(results);
+    return results;
+  }
+  _updateResolvedIdentifiers(results) {
+    // Add results to the cache.
+    this._autocompleteResolvedIdentifiers = { ...results, ...this._autocompleteResolvedIdentifiers };
+    // Update codemirror tooltips with new cached results.
+    this._codemirror.state.resolvedIdentifiers = this._autocompleteResolvedIdentifiers;
+  }
+  /**
    * Get the valid options in the `from` clause and their respective `reasoner` values
    *
    * @private
@@ -1603,6 +1718,12 @@ class App extends Component {
                   onChange={(editor) => {
                     if (editor.state.completionActive) {
                       this._codeAutoComplete();
+                    }
+                    const currentToken = editor.getTokenAt(editor.getCursor());
+                    if (currentToken.type === "string" && currentToken.string.includes(":")) {
+                      // It really doesn't need to be a curie here, since it'll just return no results,
+                      // but might as well check if there's a colon to avoid making unnecessary API requests.
+                      this._resolveIdentifiersFromCurie(getCurieFromCMToken(currentToken.string)).catch(() => {})
                     }
                     if (this.embedded) this._debouncedExecuteQuery();
                   }}
