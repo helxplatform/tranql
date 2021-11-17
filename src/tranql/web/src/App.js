@@ -1218,13 +1218,18 @@ class App extends Component {
     // Now that we have name resolutions, we need to go through and only take the ones that are the same type as conceptType.
     // For example, the conceptValue "a" could yield both "Asthma" (disease) and "Atrazine" (chemical_substance), but we only want diseases.
     const filtered = {};
+    // The qs library does not seem to support the same type of qs list serialization as is expected by node norm, but URLSearchParams does.
+    const nodeNormArgs = new URLSearchParams();
+    Object.keys(nameResolutions).forEach((curie) => nodeNormArgs.append("curie", curie));
+    // Not entirely sure what this argument does, but it sounds like it merges results which we might not want. Probably inconsequential either way.
+    nodeNormArgs.append("conflate", false);
+    const nodeNormResults = await (await fetch(
+      this.nodeNormalizationURL + '/get_normalized_nodes?' + nodeNormArgs.toString()
+    )).json();
     for (let i=0; i<Object.keys(nameResolutions).length; i++) {
       const curie = Object.keys(nameResolutions)[i];
-      const nodeNormResult = await (await fetch(
-        this.nodeNormalizationURL + '/get_normalized_nodes?' + qs.stringify({ curie })
-      )).json();
       // nodeNormResults will return an object with only one key (`curie`) since we only query with one curie.
-      const result = nodeNormResult[curie];
+      const result = nodeNormResults[curie];
       if (result !== null) {
         // The node normalization API doesn't support all curies that can be returned by the name resolution API.
         // Unsupported curies will return a null object.
