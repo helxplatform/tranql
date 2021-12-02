@@ -1258,8 +1258,18 @@ class App extends Component {
    * Very similar to `_resolveIdentifiersFromConcept`, except that is designed for use with a curie instead of a name & biolink type.
    * This is made to be used so that whenever a user types a curie directly into the query, it can automatically resolve the English name for them.
    * 
+   * @param {string} curie - A curie, e.g. "MONDO:0005240"
+   * @param {boolean=false} ignoreCache - When false, this method returns previously cached results for `curie`.
+   * 
    */
-  async _resolveIdentifiersFromCurie(curie) {
+  async _resolveIdentifiersFromCurie(curie, ignoreCache=false) {
+    /** If caching is enabled and the curie results are cached, return the cached results */
+    if (!ignoreCache && this._autocompleteResolvedIdentifiers[curie]) {
+      const results = {};
+      results[curie] = this._autocompleteResolvedIdentifiers[curie];
+      return results;
+    }
+
     const nodeNormResult = await (await fetch(
       this.nodeNormalizationURL + '/get_normalized_nodes?' + qs.stringify({ curie })
     )).json();
@@ -1719,11 +1729,20 @@ class App extends Component {
                     if (editor.state.completionActive) {
                       this._codeAutoComplete();
                     }
-                    const currentToken = editor.getTokenAt(editor.getCursor());
-                    if (currentToken.type === "string" && currentToken.string.includes(":")) {
-                      // It really doesn't need to be a curie here, since it'll just return no results,
-                      // but might as well check if there's a colon to avoid making unnecessary API requests.
-                      this._resolveIdentifiersFromCurie(getCurieFromCMToken(currentToken.string)).catch(() => {})
+                    /* Traverse through each token in the editor and perform identifier resolution on it if it's a string representing a curie */
+                    const lines = editor.lineCount();
+                    for (let lineNumber=0; lineNumber<lines; lineNumber++) {
+                      const tokens = editor.getLineTokens(lineNumber);
+                      for (let i=0; i<tokens.length; i++) {
+                        const currentToken = tokens[i];
+                        if (currentToken.type === "string" && currentToken.string.includes(":")) {
+                          // It really doesn't need to be a curie here, since it'll just return no results,
+                          // but might as well check if there's a colon to avoid making unnecessary API requests.
+                          // Also, enable returning cached results (from previous calls), since this will be run on every curie
+                          // each time the codemirror query is changed.
+                          this._resolveIdentifiersFromCurie(getCurieFromCMToken(currentToken.string)).catch(() => {}, false);
+                        }
+                      }
                     }
                     if (this.embedded) this._debouncedExecuteQuery();
                   }}
