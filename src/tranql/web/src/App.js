@@ -541,8 +541,38 @@ class App extends Component {
    * @private
    */
   _updateCode (newCode) {
+    console.log("UPDATE CODE");
     this.setState({
       code: newCode
+    });
+
+    /**
+     * Perform editor-related tasks upon query updating.
+     * Perform this on the callback (updated) state, so that the codemirror state is updated.
+     * 
+     */
+    this.setState({}, () => {
+      const editor = this._codemirror;
+      if (!editor) return;
+      if (editor.state.completionActive) {
+        this._codeAutoComplete();
+      }
+      /* Traverse through each token in the editor and perform identifier resolution on it if it's a string representing a curie */
+      const lines = editor.lineCount();
+      for (let lineNumber=0; lineNumber<lines; lineNumber++) {
+        const tokens = editor.getLineTokens(lineNumber);
+        for (let i=0; i<tokens.length; i++) {
+          const currentToken = tokens[i];
+          if (currentToken.type === "string" && currentToken.string.includes(":")) {
+            // It really doesn't need to be a curie here, since it'll just return no results,
+            // but might as well check if there's a colon to avoid making unnecessary API requests.
+            // Also, enable returning cached results (from previous calls), since this will be run on every curie
+            // each time the codemirror query is changed.
+            this._resolveIdentifiersFromCurie(getCurieFromCMToken(currentToken.string)).catch(() => {}, false);
+          }
+        }
+      }
+      if (this.embedded) this._debouncedExecuteQuery();
     });
   }
   
@@ -1012,7 +1042,7 @@ class App extends Component {
         node["id"] = id;
         if (node["category"] !== undefined && node["category"] !== null) {
           const catArr = node["category"];
-          console.log(`CATEGORY=[${catArr}]`);
+          // console.log(`CATEGORY=[${catArr}]`);
           let typeArr = catArr.map(this._categoryToType);
           node["type"] = typeArr;
         }
@@ -1726,25 +1756,6 @@ class App extends Component {
                   value={this.state.code}
                   onBeforeChange={(editor, data, code) => this._updateCode(code)}
                   onChange={(editor) => {
-                    if (editor.state.completionActive) {
-                      this._codeAutoComplete();
-                    }
-                    /* Traverse through each token in the editor and perform identifier resolution on it if it's a string representing a curie */
-                    const lines = editor.lineCount();
-                    for (let lineNumber=0; lineNumber<lines; lineNumber++) {
-                      const tokens = editor.getLineTokens(lineNumber);
-                      for (let i=0; i<tokens.length; i++) {
-                        const currentToken = tokens[i];
-                        if (currentToken.type === "string" && currentToken.string.includes(":")) {
-                          // It really doesn't need to be a curie here, since it'll just return no results,
-                          // but might as well check if there's a colon to avoid making unnecessary API requests.
-                          // Also, enable returning cached results (from previous calls), since this will be run on every curie
-                          // each time the codemirror query is changed.
-                          this._resolveIdentifiersFromCurie(getCurieFromCMToken(currentToken.string)).catch(() => {}, false);
-                        }
-                      }
-                    }
-                    if (this.embedded) this._debouncedExecuteQuery();
                   }}
                   options={this.state.codeMirrorOptions}
                   autoFocus={true} />
