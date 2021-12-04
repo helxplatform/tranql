@@ -541,7 +541,6 @@ class App extends Component {
    * @private
    */
   _updateCode (newCode) {
-    console.log("UPDATE CODE");
     this.setState({
       code: newCode
     });
@@ -572,8 +571,12 @@ class App extends Component {
           }
         }
       }
-      if (this.embedded) this._debouncedExecuteQuery();
     });
+    /**
+     * Note that the debounced query execution in embedded mode still occurs in the codemirror's `onChange` callback.
+     * This is because initially loading the ?query param into the graph should execute *immediately*, not on a debounce,
+     * (and there are a couple other issues other than the immediate execution that arise from having it here related the ?query loading). 
+     */
   }
   
   /**
@@ -1756,6 +1759,7 @@ class App extends Component {
                   value={this.state.code}
                   onBeforeChange={(editor, data, code) => this._updateCode(code)}
                   onChange={(editor) => {
+                    if (this.embedded) this._debouncedExecuteQuery();
                   }}
                   options={this.state.codeMirrorOptions}
                   autoFocus={true} />
