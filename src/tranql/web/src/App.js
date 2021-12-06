@@ -401,7 +401,8 @@ class App extends Component {
       exampleQueries : require("./static/app_data/example_queries.js"),
 
       //showAnswerViewer : true
-      showAnswerViewerOnLoad: false
+      // showAnswerViewerOnLoad: false
+      useLastUsedView: false
     };
 
     // This is a cache that stores results from `this._resolveIdentifiersFromConcept` for use in codemirror tooltips.
@@ -2376,13 +2377,15 @@ class App extends Component {
     /**
      * Parse params into vars:
      * - q|query
-     * - embedded: full|graph|simple|true|false
-     * - answer_viewer: true|false
+     * - embedded: full | (graph|simple|true|"") | (false|<any>)
+     * - answer_viewer: (true|"") | (false|<any>) <- DISABLED
+     * - use_last_view: (true|"") | (false|<any>)
      */
     const tranqlQuery = params.q || params.query;
     const {
       embed: embedded,
-      answer_viewer: showAnswerViewer
+      use_last_view: useLastUsedView
+      // answer_viewer: showAnswerViewer
     } = params;
 
     if (tranqlQuery !== undefined) {
@@ -2412,20 +2415,30 @@ class App extends Component {
       this.setState({
         useCache : false
       });
-      // Disable localStorage on embedded websites. Even though settings/cache is disabled,
-      // some other parts of the app also write/read from localStorage, for example:
-      //   when a query is executed, it stores the query in local stoarge under the key `code`.
-      window.localStorage.__proto__ = Object.create({
+      // Maintain localStorage under window.embeddedLocalStorage such that
+      // the App can only use localStorage while embedded when explcitly intended.
+      window.embeddedLocalStorage = window.localStorage;
+      const _localStorage = window.localStorage;
+      // localStorage is a property of window with a getter but no setter, so it has to be fully deleted before setting it to a new value.
+      delete window.localStorage;
+      // Create a skeleton version of localStorage, in which persistent methods are overwritten while preserving the full API.
+      const skeletonStorage = Object.assign({
         setItem: () => {},
         removeItem: () => {},
         key: () => {},
         getItem: () => {},
         removeItem: () => {},
         length: 0
+      }, _localStorage);
+      // Create the new localStorage property with the skeleton storage.
+      Object.defineProperty(window, "localStorage", {
+        get: () => skeletonStorage
       });
     }
     // Note: this option is only intended for use within an embedded page, since it doesn't make much sense in a normal context.
-    this.setState({ showAnswerViewerOnLoad: showAnswerViewer === "true" || showAnswerViewer === "" });
+    // Note2: *DISABLED*
+    // this.setState({ showAnswerViewerOnLoad: showAnswerViewer === "true" || showAnswerViewer === "" });
+    this.setState({ useLastUsedView: useLastUsedView === "true" || useLastUsedView === "" });
   }
   /**
    * Perform any necessary cleanup before being unmounted
@@ -2500,7 +2513,7 @@ class App extends Component {
   render() {
     // Render just the graph if the app is being embedded
     if (this.embedded) return <TranQLEmbedded embedMode={this.embedMode}
-                                              defaultShowAnswerViewer={this.state.showAnswerViewerOnLoad}
+                                              useLastUsedView={this.state.useLastUsedView}
                                               graphLoading={this.state.loading}
                                               graph={this.state.graph}
                                               renderForceGraph={this._renderForceGraph}
