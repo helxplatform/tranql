@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Button } from 'reactstrap';
+import { SizeMe } from 'react-sizeme';
 import { GridLoader } from 'react-spinners';
 import { FaFrown, FaPlayCircle } from 'react-icons/fa';
 import { css } from '@emotion/core';
@@ -34,10 +35,19 @@ export default function TranQLEmbedded({ embedMode, graphLoading, graph, renderF
                 {renderAnswerViewer({asModal: false})}
             </div>
         );
-        else return renderForceGraph (
-            graph, {
-            ref: graphRefCallback
-        });
+        else return (
+          <SizeMe monitorHeight>
+            {
+              ({size}) => 
+                renderForceGraph (
+                  graph, {
+                    ref: graphRefCallback,
+                    height: size.height
+                  }
+                )
+            }
+          </SizeMe>
+        );
     }
 
     return (

@@ -2438,7 +2438,11 @@ class App extends Component {
     // & hydrate state accordingly
     this._handleQueryString ();
     // Hydrate persistent state from local storage
-    if (!this.embedded) this._hydrateState ();
+    if (!this.embedded) {
+      this._hydrateState ();
+      // Make sure that the code loaded from localStorage goes through `_updateCode`
+      this.setState({}, () => this._updateCode(this.state.code));
+    }
 
     // Populate the cache viewer
     this._updateCacheViewer ();
@@ -2581,7 +2585,7 @@ class App extends Component {
         {this._renderAnswerViewer()}
         <ReactTooltip place="left"/>
         {this._renderBanner()}
-        <div>
+        <div className="App-body">
           {
             this.state.showCodeMirror ?
               (
