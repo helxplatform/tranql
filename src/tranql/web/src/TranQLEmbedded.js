@@ -23,8 +23,8 @@ const spinnerStyleOverride = css`
     SIMPLE: 2
   });
 
-export default function TranQLEmbedded({ embedMode, graphLoading, graph, renderForceGraph, renderCodemirror, renderAnswerViewer, graphRefCallback }) {
-    const [answerViewer, useAnswerViewer] = useState(false);
+export default function TranQLEmbedded({ embedMode, defaultShowAnswerViewer, graphLoading, graph, renderForceGraph, renderCodemirror, renderAnswerViewer, graphRefCallback }) {
+    const [answerViewer, useAnswerViewer] = useState(defaultShowAnswerViewer);
 
     const toggleAnswerViewer = () => {
         useAnswerViewer(!answerViewer);

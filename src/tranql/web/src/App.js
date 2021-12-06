@@ -398,9 +398,10 @@ class App extends Component {
 
       activeModal : null,
 
-      exampleQueries : require("./static/app_data/example_queries.js")
+      exampleQueries : require("./static/app_data/example_queries.js"),
 
       //showAnswerViewer : true
+      showAnswerViewerOnLoad: false
     };
 
     // This is a cache that stores results from `this._resolveIdentifiersFromConcept` for use in codemirror tooltips.
@@ -2372,8 +2373,18 @@ class App extends Component {
     // `ignoreQueryPrefix` automatically truncates the leading question mark within a query string in order to prevent it from being interpreted as part of it
     const params = qs.parse(window.location.search, { ignoreQueryPrefix : true });
 
+    /**
+     * Parse params into vars:
+     * - q|query
+     * - embedded: full|graph|simple|true|false
+     * - answer_viewer: true|false
+     */
     const tranqlQuery = params.q || params.query;
-    const embedded = params.embed;
+    const {
+      embed: embedded,
+      answer_viewer: showAnswerViewer
+    } = params;
+
     if (tranqlQuery !== undefined) {
       this._queryExecOnLoad = tranqlQuery;
     }
@@ -2413,6 +2424,8 @@ class App extends Component {
         length: 0
       });
     }
+    // Note: this option is only intended for use within an embedded page, since it doesn't make much sense in a normal context.
+    this.setState({ showAnswerViewerOnLoad: showAnswerViewer === "true" || showAnswerViewer === "" });
   }
   /**
    * Perform any necessary cleanup before being unmounted
@@ -2487,6 +2500,7 @@ class App extends Component {
   render() {
     // Render just the graph if the app is being embedded
     if (this.embedded) return <TranQLEmbedded embedMode={this.embedMode}
+                                              defaultShowAnswerViewer={this.state.showAnswerViewerOnLoad}
                                               graphLoading={this.state.loading}
                                               graph={this.state.graph}
                                               renderForceGraph={this._renderForceGraph}
