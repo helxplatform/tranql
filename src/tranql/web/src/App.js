@@ -1583,7 +1583,8 @@ class App extends Component {
     if (this.fg) {
       // Performing actions such as dragging a node will reset fg.controls().enabled back to true automatically,
       // thus it's necessary to hook into the TrackballControls and make sure that they're immediately re-disabled.
-      if (this.embedded) {
+      // *Currently disabled always.* 
+      if (this.embedded && false) {
         const controls = this.fg.controls();
         controls.enabled = false;
         const _update = controls.update.bind(controls);
