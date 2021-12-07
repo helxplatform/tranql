@@ -998,8 +998,6 @@ class App extends Component {
           cond.schemaMessage = message;
         }
         else {
-          if (!message.message) console.trace();
-          console.log(Object.keys(message));
           cond.message = message;
           cond.record = this._cacheFormat(message);
         }
