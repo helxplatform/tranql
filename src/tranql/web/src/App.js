@@ -998,6 +998,8 @@ class App extends Component {
           cond.schemaMessage = message;
         }
         else {
+          if (!message.message) console.trace();
+          console.log(Object.keys(message));
           cond.message = message;
           cond.record = this._cacheFormat(message);
         }
@@ -1085,9 +1087,7 @@ class App extends Component {
       };
       message.knowledge_graph.edges = newLinkArray;
     };
-    // NOTE: Pretty sure this is the culprit of a bug where the graph is set to the schema on page load,
-    // causing the graph view to display the schema until a query is made overriding it.
-    this._configureMessage (message,false,false);
+    this._configureMessage (message,false,schema);
     this.setState({},() => {
       if (typeof noRenderChain === "undefined") noRenderChain = false;
       if (typeof schema === "undefined") schema = this.state.schemaViewerActive && this.state.schemaViewerEnabled;
