@@ -9,7 +9,11 @@ from tranql.exception import TranQLException, InvalidTransitionException
 import time
 import threading
 from PLATER.services.util.graph_adapter import GraphInterface
-from tranql.util import snake_case
+from tranql.util import snake_case, title_case
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class NetworkxGraph:
     def __init__(self):
@@ -25,14 +29,19 @@ class NetworkxGraph:
         nodes = self.net.nodes(data=True)
         filtered = [i for i in nodes if i[0] == identifier]
         return filtered[0] if len(filtered) > 0 else None
-    def get_edge (self, start, end, properties=None):
-        result = None
-        for e in self.net.edges:
-            #print (f"-----    {start} {end} | {e[0]} {e[2]}")
-            if e[0] == start and e[1] == end:
-                result = e
-                break
-        return result
+    """ Returns an edge from the graph or None. Note that the edge attr dict returned is mutable.
+    :param predicate: If None, will return the first edge found between start->end if one exists.
+    :return: (start, predicate, end, attr_data) | None
+    """
+    def get_edge (self, start, end, predicate=None, properties=None):
+        try:
+            edges = self.net[start][end]
+            if predicate is None:
+                predicate = list(edges.keys())[0]
+            edge_data = edges[predicate]
+            return (start, predicate, end, edge_data)
+        except:
+            return None
     def get_nodes (self,**kwargs):
         return self.net.nodes(**kwargs)
     def get_edges (self,**kwargs):
@@ -161,7 +170,7 @@ class RedisAdapter:
             **redis_connection_details
         )
 
-    def _get_adatpter(self, name):
+    def _get_adapter(self, name):
         if name not in RedisAdapter.registry_adapters:
             raise ValueError(f"Redis backend with name {name} not registered.")
         return RedisAdapter.registry_adapters.get(name)
@@ -174,7 +183,7 @@ class RedisAdapter:
         )
 
     def get_schema(self, name):
-        gi: GraphInterface = self._get_adatpter(name)
+        gi: GraphInterface = self._get_adapter(name)
         schema = gi.get_schema(force_update=True)
         return schema
 
@@ -337,6 +346,38 @@ class Schema:
                 for link in links:
                     #print (f" {source_name}->{target_type} [{link}]")
                     self.schema_graph.add_edge (source_name, link, target_type, {"reasoner":[name]})
+        self.decorate_schema(layer, name)
+    
+    """
+    Manually perform scoring on the Redis reasoner, since it supports it. If more reasoners support it,
+    this should obviously be changed to be done dynamically on each reasoner and should probably be generalized
+    to attribute decoration rather than just scoring.
+    """
+    def decorate_schema(self, layer, name=None):
+        if name != "redis":
+            return
+        
+        def toBiolink(concept):
+            return "biolink:" + title_case(concept)
+
+        redis_adapter = RedisAdapter()
+        adapter = redis_adapter._get_adapter(name)
+        for source_name, targets_list in layer.items ():
+            source_node = self.get_node (node_id=source_name)
+            for target_type, links in targets_list.items ():
+                target_node = self.get_node (node_id=target_type)
+                # Get the number of total transitions from source_node->target_node
+                logger.critical(f"MATCH (c:`{toBiolink(source_name)}`)-[e]->(b:`{toBiolink(target_type)}`) return COUNT(e) as cnt")
+                total_count = adapter.driver.run_sync(f"MATCH (c:`{toBiolink(source_name)}`)-[e]->(b:`{toBiolink(target_type)}`) return COUNT(e) as cnt")["results"][0]["data"][0]["row"][0]
+                if isinstance(links, str):
+                    links = [links]
+                for link in links:
+                    (_, _, _, edge_data) = self.schema_graph.get_edge (source_name, target_type, link)
+                    # Then score each individual link based on the proportion of said edge between source_node->target_node
+                    # relative to the total edges between the concepts.
+                    individual_count = adapter.driver.run_sync(f"MATCH (c:`{toBiolink(source_name)}`)-[e:`biolink:{link}`]->(b:`{toBiolink(target_type)}`) return COUNT(e) as cnt")["results"][0]["data"][0]["row"][0]
+                    edge_data["score"] = individual_count / total_count
+                
 
     def get_edge (self, plan, source_name, source_type, target_name, target_type,
                   predicate, edge_direction):

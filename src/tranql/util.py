@@ -408,6 +408,16 @@ def deep_merge(source, destination, no_list_repeat=True):
     return destination
 
 
+def camel_case(arg: str):
+    """Convert snake_case string to camelCase"""
+    split = arg.split("_")
+    return split[0] + ''.join([i.title() for i in split[1:]])
+
+def title_case(arg: str):
+    """Convert snake_case string to TitleCase"""
+    split = arg.split("_")
+    return ''.join([i.title() for i in arg.split("_")])
+
 def snake_case(arg: str):
     """Convert string to snake_case.
     Non-alphanumeric characters are replaced with _.
