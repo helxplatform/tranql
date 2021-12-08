@@ -450,13 +450,22 @@ export default function autoComplete () {
                }
              })
            }
-           validConcepts = validConcepts.unique().map((concept) => {
-             return {
-               displayText: concept,
-               text: concept,
-               replaceText: currentConcept
-             };
-           });
+           const getEdgeCount = (sourceName, targetName) => (
+             graph.edges.filter((edge) => edge.source_id === sourceName && edge.target_id === targetName).length
+           );
+           const getConnectivityScore = (concept) => {
+             // Since select statement completion isn't really supported on backwards arrows yet, just sort as if it's a forwards arrow.
+             return getEdgeCount(previousConcept, concept);
+           }
+           validConcepts = validConcepts.unique()
+             .sort((conceptA, conceptB) => getConnectivityScore(conceptB) - getConnectivityScore(conceptA))
+             .map((concept) => {
+               return {
+                 displayText: concept,
+                 text: concept,
+                 replaceText: currentConcept
+               };
+             });
          }
          setHint(validConcepts);
 
