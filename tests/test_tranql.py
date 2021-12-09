@@ -2090,6 +2090,7 @@ def test_redis_graph_cypher_options(GraphInterfaceMock):
             self.limit = limit
             self.skip  = skip
             self.options_set = options_set
+            self.summary = {}
 
         async def answer_trapi_question(self, message, options={}, timeout=0):
             assert message
@@ -2161,6 +2162,7 @@ def test_redis_graph_query_redis_schema_empty_response():
         def __init__(self):
             self.get_schema_called =False
             self.answer_trapi_question_called =False
+            self.summary = {}
         def get_schema(self, force_update=False):
             self.get_schema_called = True
             return {}
@@ -2231,6 +2233,7 @@ def test_query_timeout(GraphInterfaceMock):
             self.options_set = options_set
             self.answer_trapi_question
             self.is_called = False
+            self.summary = {}
 
         def get_schema(self, *args, **kwargs):
             return {
