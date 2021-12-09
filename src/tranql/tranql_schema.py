@@ -362,20 +362,24 @@ class Schema:
 
         redis_adapter = RedisAdapter()
         adapter = redis_adapter._get_adapter(name)
+        schema_summary = adapter.summary
         for source_name, targets_list in layer.items ():
             source_node = self.get_node (node_id=source_name)
+            biolink_source_name = toBiolink(source_name)
+            if not source_name in schema_summary: continue
             for target_type, links in targets_list.items ():
                 target_node = self.get_node (node_id=target_type)
-                # Get the number of total transitions from source_node->target_node
-                logger.critical(f"MATCH (c:`{toBiolink(source_name)}`)-[e]->(b:`{toBiolink(target_type)}`) return COUNT(e) as cnt")
-                total_count = adapter.driver.run_sync(f"MATCH (c:`{toBiolink(source_name)}`)-[e]->(b:`{toBiolink(target_type)}`) return COUNT(e) as cnt")["results"][0]["data"][0]["row"][0]
+                biolink_target_type = toBiolink(target_type)
+                if not biolink_target_type in schema_summary[biolink_source_name]: continue
+                edge_summary = schema_summary[biolink_source_name][biolink_target_type]
+                total_count = sum(edge_summary.values())
                 if isinstance(links, str):
                     links = [links]
                 for link in links:
+                    biolink_link = "biolink:" + link
+                    if not biolink_link in edge_summary: continue
                     (_, _, _, edge_data) = self.schema_graph.get_edge (source_name, target_type, link)
-                    # Then score each individual link based on the proportion of said edge between source_node->target_node
-                    # relative to the total edges between the concepts.
-                    individual_count = adapter.driver.run_sync(f"MATCH (c:`{toBiolink(source_name)}`)-[e:`biolink:{link}`]->(b:`{toBiolink(target_type)}`) return COUNT(e) as cnt")["results"][0]["data"][0]["row"][0]
+                    individual_count = edge_summary[biolink_link]
                     edge_data["score"] = individual_count / total_count
                 
 
