@@ -366,7 +366,7 @@ class Schema:
         for source_name, targets_list in layer.items ():
             source_node = self.get_node (node_id=source_name)
             biolink_source_name = toBiolink(source_name)
-            if not source_name in schema_summary: continue
+            if not biolink_source_name in schema_summary: continue
             for target_type, links in targets_list.items ():
                 target_node = self.get_node (node_id=target_type)
                 biolink_target_type = toBiolink(target_type)
