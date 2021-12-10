@@ -1324,6 +1324,7 @@ class App extends Component {
   _updateResolvedIdentifiers(results) {
     // Add results to the cache.
     this._autocompleteResolvedIdentifiers = { ...results, ...this._autocompleteResolvedIdentifiers };
+    localStorage.setItem('autocompleteIdentifiers', JSON.stringify(this._autocompleteResolvedIdentifiers));
     // Update codemirror tooltips with new cached results.
     this._codemirror.state.resolvedIdentifiers = this._autocompleteResolvedIdentifiers;
   }
@@ -2465,6 +2466,9 @@ class App extends Component {
     // Hydrate persistent state from local storage
     if (!this.embedded) {
       this._hydrateState ();
+      // This is a class field, not a state variable, so it needs to be manually loaded. It also has to update codemirror state,
+      // which is another reason it needs to be manualy handled.
+      this._updateResolvedIdentifiers(JSON.parse(localStorage.getItem('autocompleteIdentifiers')) || {});
       // Make sure that the code loaded from localStorage goes through `_updateCode`
       this.setState({}, () => this._updateCode(this.state.code));
     }
