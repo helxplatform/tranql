@@ -398,9 +398,11 @@ class App extends Component {
 
       activeModal : null,
 
-      exampleQueries : require("./static/app_data/example_queries.js")
+      exampleQueries : require("./static/app_data/example_queries.js"),
 
       //showAnswerViewer : true
+      // showAnswerViewerOnLoad: false
+      useLastUsedView: false
     };
 
     // This is a cache that stores results from `this._resolveIdentifiersFromConcept` for use in codemirror tooltips.
@@ -544,6 +546,39 @@ class App extends Component {
     this.setState({
       code: newCode
     });
+
+    /**
+     * Perform editor-related tasks upon query updating.
+     * Perform this on the callback (updated) state, so that the codemirror state is updated.
+     * 
+     */
+    this.setState({}, () => {
+      const editor = this._codemirror;
+      if (!editor) return;
+      if (editor.state.completionActive) {
+        this._codeAutoComplete();
+      }
+      /* Traverse through each token in the editor and perform identifier resolution on it if it's a string representing a curie */
+      const lines = editor.lineCount();
+      for (let lineNumber=0; lineNumber<lines; lineNumber++) {
+        const tokens = editor.getLineTokens(lineNumber);
+        for (let i=0; i<tokens.length; i++) {
+          const currentToken = tokens[i];
+          if (currentToken.type === "string" && currentToken.string.includes(":")) {
+            // It really doesn't need to be a curie here, since it'll just return no results,
+            // but might as well check if there's a colon to avoid making unnecessary API requests.
+            // Also, enable returning cached results (from previous calls), since this will be run on every curie
+            // each time the codemirror query is changed.
+            this._resolveIdentifiersFromCurie(getCurieFromCMToken(currentToken.string)).catch(() => {}, false);
+          }
+        }
+      }
+    });
+    /**
+     * Note that the debounced query execution in embedded mode still occurs in the codemirror's `onChange` callback.
+     * This is because initially loading the ?query param into the graph should execute *immediately*, not on a debounce,
+     * (and there are a couple other issues other than the immediate execution that arise from having it here related the ?query loading). 
+     */
   }
   
   /**
@@ -1012,7 +1047,7 @@ class App extends Component {
         node["id"] = id;
         if (node["category"] !== undefined && node["category"] !== null) {
           const catArr = node["category"];
-          console.log(`CATEGORY=[${catArr}]`);
+          // console.log(`CATEGORY=[${catArr}]`);
           let typeArr = catArr.map(this._categoryToType);
           node["type"] = typeArr;
         }
@@ -1050,9 +1085,7 @@ class App extends Component {
       };
       message.knowledge_graph.edges = newLinkArray;
     };
-    // NOTE: Pretty sure this is the culprit of a bug where the graph is set to the schema on page load,
-    // causing the graph view to display the schema until a query is made overriding it.
-    this._configureMessage (message,false,false);
+    this._configureMessage (message,false,schema);
     this.setState({},() => {
       if (typeof noRenderChain === "undefined") noRenderChain = false;
       if (typeof schema === "undefined") schema = this.state.schemaViewerActive && this.state.schemaViewerEnabled;
@@ -1258,8 +1291,18 @@ class App extends Component {
    * Very similar to `_resolveIdentifiersFromConcept`, except that is designed for use with a curie instead of a name & biolink type.
    * This is made to be used so that whenever a user types a curie directly into the query, it can automatically resolve the English name for them.
    * 
+   * @param {string} curie - A curie, e.g. "MONDO:0005240"
+   * @param {boolean=false} ignoreCache - When false, this method returns previously cached results for `curie`.
+   * 
    */
-  async _resolveIdentifiersFromCurie(curie) {
+  async _resolveIdentifiersFromCurie(curie, ignoreCache=false) {
+    /** If caching is enabled and the curie results are cached, return the cached results */
+    if (!ignoreCache && this._autocompleteResolvedIdentifiers[curie]) {
+      const results = {};
+      results[curie] = this._autocompleteResolvedIdentifiers[curie];
+      return results;
+    }
+
     const nodeNormResult = await (await fetch(
       this.nodeNormalizationURL + '/get_normalized_nodes?' + qs.stringify({ curie })
     )).json();
@@ -1281,6 +1324,7 @@ class App extends Component {
   _updateResolvedIdentifiers(results) {
     // Add results to the cache.
     this._autocompleteResolvedIdentifiers = { ...results, ...this._autocompleteResolvedIdentifiers };
+    localStorage.setItem('autocompleteIdentifiers', JSON.stringify(this._autocompleteResolvedIdentifiers));
     // Update codemirror tooltips with new cached results.
     this._codemirror.state.resolvedIdentifiers = this._autocompleteResolvedIdentifiers;
   }
@@ -1540,7 +1584,8 @@ class App extends Component {
     if (this.fg) {
       // Performing actions such as dragging a node will reset fg.controls().enabled back to true automatically,
       // thus it's necessary to hook into the TrackballControls and make sure that they're immediately re-disabled.
-      if (this.embedded) {
+      // *Currently disabled always.* 
+      if (this.embedded && false) {
         const controls = this.fg.controls();
         controls.enabled = false;
         const _update = controls.update.bind(controls);
@@ -1716,15 +1761,6 @@ class App extends Component {
                   value={this.state.code}
                   onBeforeChange={(editor, data, code) => this._updateCode(code)}
                   onChange={(editor) => {
-                    if (editor.state.completionActive) {
-                      this._codeAutoComplete();
-                    }
-                    const currentToken = editor.getTokenAt(editor.getCursor());
-                    if (currentToken.type === "string" && currentToken.string.includes(":")) {
-                      // It really doesn't need to be a curie here, since it'll just return no results,
-                      // but might as well check if there's a colon to avoid making unnecessary API requests.
-                      this._resolveIdentifiersFromCurie(getCurieFromCMToken(currentToken.string)).catch(() => {})
-                    }
                     if (this.embedded) this._debouncedExecuteQuery();
                   }}
                   options={this.state.codeMirrorOptions}
@@ -2337,8 +2373,20 @@ class App extends Component {
     // `ignoreQueryPrefix` automatically truncates the leading question mark within a query string in order to prevent it from being interpreted as part of it
     const params = qs.parse(window.location.search, { ignoreQueryPrefix : true });
 
+    /**
+     * Parse params into vars:
+     * - q|query
+     * - embedded: full | (graph|simple|true|"") | (false|<any>)
+     * - answer_viewer: (true|"") | (false|<any>) <- DISABLED
+     * - use_last_view: (true|"") | (false|<any>)
+     */
     const tranqlQuery = params.q || params.query;
-    const embedded = params.embed;
+    const {
+      embed: embedded,
+      use_last_view: useLastUsedView
+      // answer_viewer: showAnswerViewer
+    } = params;
+
     if (tranqlQuery !== undefined) {
       this._queryExecOnLoad = tranqlQuery;
     }
@@ -2366,18 +2414,30 @@ class App extends Component {
       this.setState({
         useCache : false
       });
-      // Disable localStorage on embedded websites. Even though settings/cache is disabled,
-      // some other parts of the app also write/read from localStorage, for example:
-      //   when a query is executed, it stores the query in local stoarge under the key `code`.
-      window.localStorage.__proto__ = Object.create({
+      // Maintain localStorage under window.embeddedLocalStorage such that
+      // the App can only use localStorage while embedded when explcitly intended.
+      window.embeddedLocalStorage = window.localStorage;
+      const _localStorage = window.localStorage;
+      // localStorage is a property of window with a getter but no setter, so it has to be fully deleted before setting it to a new value.
+      delete window.localStorage;
+      // Create a skeleton version of localStorage, in which persistent methods are overwritten while preserving the full API.
+      const skeletonStorage = Object.assign({
         setItem: () => {},
         removeItem: () => {},
         key: () => {},
         getItem: () => {},
         removeItem: () => {},
         length: 0
+      }, _localStorage);
+      // Create the new localStorage property with the skeleton storage.
+      Object.defineProperty(window, "localStorage", {
+        get: () => skeletonStorage
       });
     }
+    // Note: this option is only intended for use within an embedded page, since it doesn't make much sense in a normal context.
+    // Note2: *DISABLED*
+    // this.setState({ showAnswerViewerOnLoad: showAnswerViewer === "true" || showAnswerViewer === "" });
+    this.setState({ useLastUsedView: useLastUsedView === "true" || useLastUsedView === "" });
   }
   /**
    * Perform any necessary cleanup before being unmounted
@@ -2404,7 +2464,14 @@ class App extends Component {
     // & hydrate state accordingly
     this._handleQueryString ();
     // Hydrate persistent state from local storage
-    if (!this.embedded) this._hydrateState ();
+    if (!this.embedded) {
+      this._hydrateState ();
+      // This is a class field, not a state variable, so it needs to be manually loaded. It also has to update codemirror state,
+      // which is another reason it needs to be manualy handled.
+      this._updateResolvedIdentifiers(JSON.parse(localStorage.getItem('autocompleteIdentifiers')) || {});
+      // Make sure that the code loaded from localStorage goes through `_updateCode`
+      this.setState({}, () => this._updateCode(this.state.code));
+    }
 
     // Populate the cache viewer
     this._updateCacheViewer ();
@@ -2448,6 +2515,7 @@ class App extends Component {
   render() {
     // Render just the graph if the app is being embedded
     if (this.embedded) return <TranQLEmbedded embedMode={this.embedMode}
+                                              useLastUsedView={this.state.useLastUsedView}
                                               graphLoading={this.state.loading}
                                               graph={this.state.graph}
                                               renderForceGraph={this._renderForceGraph}
@@ -2547,7 +2615,7 @@ class App extends Component {
         {this._renderAnswerViewer()}
         <ReactTooltip place="left"/>
         {this._renderBanner()}
-        <div>
+        <div className="App-body">
           {
             this.state.showCodeMirror ?
               (

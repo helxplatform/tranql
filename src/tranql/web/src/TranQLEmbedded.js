@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Button } from 'reactstrap';
+import { SizeMe } from 'react-sizeme';
 import { GridLoader } from 'react-spinners';
 import { FaFrown, FaPlayCircle } from 'react-icons/fa';
 import { css } from '@emotion/core';
@@ -22,11 +23,16 @@ const spinnerStyleOverride = css`
     SIMPLE: 2
   });
 
-export default function TranQLEmbedded({ embedMode, graphLoading, graph, renderForceGraph, renderCodemirror, renderAnswerViewer, graphRefCallback }) {
-    const [answerViewer, useAnswerViewer] = useState(false);
+export default function TranQLEmbedded({ embedMode, useLastUsedView, graphLoading, graph, renderForceGraph, renderCodemirror, renderAnswerViewer, graphRefCallback }) {
+    const defaultShowAnswerViewer = window.embeddedLocalStorage.getItem("defaultUseAnswerViewer") === "true";
+    // If using the last used view, load that view from localStorage. Else, show the force graph by default.
+    const [answerViewer, useAnswerViewer] = useState(useLastUsedView ? defaultShowAnswerViewer : false);
 
     const toggleAnswerViewer = () => {
-        useAnswerViewer(!answerViewer);
+        const newValue = !answerViewer;
+        useAnswerViewer(newValue);
+        // localStorage is disabled on embedded mode. Need to use embeddedLocalStorage to write/read.
+        window.embeddedLocalStorage.setItem('defaultUseAnswerViewer', JSON.stringify(newValue));
     }
     const renderBody = () => {
         if (answerViewer) return (
@@ -34,10 +40,19 @@ export default function TranQLEmbedded({ embedMode, graphLoading, graph, renderF
                 {renderAnswerViewer({asModal: false})}
             </div>
         );
-        else return renderForceGraph (
-            graph, {
-            ref: graphRefCallback
-        });
+        else return (
+          <SizeMe monitorHeight>
+            {
+              ({size}) => 
+                renderForceGraph (
+                  graph, {
+                    ref: graphRefCallback,
+                    height: size.height
+                  }
+                )
+            }
+          </SizeMe>
+        );
     }
 
     return (

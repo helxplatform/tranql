@@ -19,7 +19,7 @@ redisgraph==2.2.4
 requests==2.25.1
 requests-cache==0.4.13
 requests-mock==1.5.2
-PLATER-GRAPH==1.9.8
+git+https://github.com/helxplatform/Plater.git@v1.9.9
 bmt==0.7.2
 git+https://github.com/ranking-agent/reasoner.git
 git+https://github.com/TranslatorSRI/reasoner-pydantic@v1.0.0#egg=reasoner-pydantic

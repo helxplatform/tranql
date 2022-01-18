@@ -308,6 +308,17 @@ export default function autoComplete () {
        const secondLastToken = lastStatement[lastStatement.length-2];
        const thirdLastToken = lastStatement[lastStatement.length-3];
 
+       // It's difficult to tell when parsing "SELECT disease->| FROM ...", whether "FROM" is the second concept, or if it starts the FROM statement.
+       // In the ordinary parser, "FROM" will be parsed as a concept name here, but obviously this is almost 99% of the time not the intention when
+       // using autocomplete.
+       // Thus, in autocompletion specifcially, let's blacklist FROM as a concept name (the incomplete parser itself will still parse it as a concept name),
+       // for the sake of convenience. Of course, if by some chance "from" becomes a valid concept in the biolink model, this will a niche bug, but it's probably
+       // better for the sake of avoiding the headache that would be working around this fringe case.
+       let hasNoNextConcept = (lastStatementComplete.length - lastStatement.length) == 0;
+       let nextConcept = hasNoNextConcept ? undefined : concept(lastStatementComplete[lastStatement.length]) ;
+       // See https://github.com/frostyfan109/tranql/issues/117 for an older detailed breakdown on the issue.
+       if (typeof nextConcept === "string" && nextConcept.toLowerCase() === "from") nextConcept = undefined;
+
        console.log(statementType, lastStatement, lastToken);
 
        // Try/catch the entirety of the logic
@@ -333,19 +344,12 @@ export default function autoComplete () {
              lastToken[1] !== undefined ? lastToken[1] : ""
            ]);
            let previousConcept = concept(secondLastToken);
-           // May be undefined if there is no next concept
-           let has_no_next_concept = (lastStatementComplete.length - lastStatement.length) == 0;
-           let nextConcept = has_no_next_concept? undefined : concept(lastStatementComplete[lastStatement.length]) ;
-           // See https://github.com/frostyfan109/tranql/issues/117 for why this approach doesn't work
-
-
 
            const backwards = isBackwardsPredicate (currentPredicate);
 
            console.log ([previousConcept, currentPredicate, nextConcept]);
 
            // Should replace this method with reduce
-
            const allEdges = graph.edges.filter((edge) => {
              if (backwards) {
                return edge.target_id === previousConcept &&
@@ -367,12 +371,12 @@ export default function autoComplete () {
              }
            });
            const uniqueEdges = Object.values(uniqueEdgeMap);
-           validConcepts = uniqueEdges.map((edge) => {
+           validConcepts = uniqueEdges.sort((e1, e2) => e2.score - e1.score).map((edge) => {
              const replaceText = currentPredicate[1];
              // const actualText = type + currentPredicate[2];
              const conceptHint = " (" + (backwards ? edge.source_id : edge.target_id) + ")";
              const actualText = edge.type;
-             const displayText = edge.type + conceptHint;
+             const displayText = edge.type;
              return {
                displayText: displayText,
                text: actualText,
@@ -450,13 +454,22 @@ export default function autoComplete () {
                }
              })
            }
-           validConcepts = validConcepts.unique().map((concept) => {
-             return {
-               displayText: concept,
-               text: concept,
-               replaceText: currentConcept
-             };
-           });
+           const getEdgeCount = (sourceName, targetName) => (
+             graph.edges.filter((edge) => edge.source_id === sourceName && edge.target_id === targetName).length
+           );
+           const getConnectivityScore = (concept) => {
+             // Since select statement completion isn't really supported on backwards arrows yet, just sort as if it's a forwards arrow.
+             return getEdgeCount(previousConcept, concept);
+           }
+           validConcepts = validConcepts.unique()
+             .sort((conceptA, conceptB) => getConnectivityScore(conceptB) - getConnectivityScore(conceptA))
+             .map((concept) => {
+               return {
+                 displayText: concept,
+                 text: concept,
+                 replaceText: currentConcept
+               };
+             });
          }
          setHint(validConcepts);
 
