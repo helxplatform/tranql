@@ -1239,6 +1239,7 @@ class App extends Component {
     if (!ignoreCache) {
       // Find any cahced results that have the same type as `conceptType` and have a label that starts with `conceptValue`.
       const results = Object.entries(this._autocompleteResolvedIdentifiers).filter(([curie, data]) => {
+        return data._searchMetadata.some(([cachedConceptValue, cachedConceptType]) => cachedConceptValue === conceptValue && cachedConceptType === conceptType);
         return data._searchConceptType === conceptType && data._searchConceptValue === conceptValue;
         return (
           // data._searchConceptType && data._searchConceptType.startsWith(conceptType) &&
@@ -1305,8 +1306,7 @@ class App extends Component {
           // otherLabels: nameResolutions[curie],
           // equivalentIdentifiers: result["equivalent_identifiers"],
           type: result["type"],
-          _searchConceptValue: conceptValue,
-          _searchConceptType: conceptType
+          _searchMetadata: [[conceptValue, conceptType]],
         };
       }
     }
@@ -1344,7 +1344,8 @@ class App extends Component {
         /* Too much space when caching */
         // otherLabels: [result["id"]["label"]],
         // equivalentIdentifiers: result["equivalent_identifiers"],
-        type: result["type"]
+        type: result["type"],
+        _searchMetadata: []
       };
     }
     this._updateResolvedIdentifiers(results, -1);
@@ -1363,7 +1364,17 @@ class App extends Component {
       results = Object.fromEntries(Object.entries(results).sort(([_, result1], [__, result2]) => result2.score - result1.score).slice(0, cacheLimit));
     }
     // Add results to the cache.
-    this._autocompleteResolvedIdentifiers = { ...results, ...this._autocompleteResolvedIdentifiers };
+    Object.entries(results).forEach(([curie, result]) => {
+      const storedResult = this._autocompleteResolvedIdentifiers[curie];
+      if (storedResult) {
+        // Update result (newer data) with metadata from old result.
+        console.log("Updating result for ", curie);
+        result._searchMetadata = result._searchMetadata.concat(storedResult._searchMetadata);
+      }
+      console.log("Caching result for", curie)
+      // Store newest data in cache.
+      this._autocompleteResolvedIdentifiers[curie] = result;
+    });
     localStorage.setItem('autocompleteIdentifiers', JSON.stringify(this._autocompleteResolvedIdentifiers));
     // Update codemirror tooltips with new cached results.
     this._codemirror.state.resolvedIdentifiers = this._autocompleteResolvedIdentifiers;
@@ -2508,7 +2519,7 @@ class App extends Component {
       this._hydrateState ();
       // This is a class field, not a state variable, so it needs to be manually loaded. It also has to update codemirror state,
       // which is another reason it needs to be manualy handled.
-      this._updateResolvedIdentifiers(JSON.parse(localStorage.getItem('autocompleteIdentifiers')) || {});
+      this._updateResolvedIdentifiers(JSON.parse(localStorage.getItem('autocompleteIdentifiers')) || {}, -1);
       // Make sure that the code loaded from localStorage goes through `_updateCode`
       this.setState({}, () => this._updateCode(this.state.code));
     }

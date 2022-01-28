@@ -600,7 +600,7 @@ export default function autoComplete () {
             // culled by type-checking them, meaning there'll be much less than `resultLimit` results. Thus, we'll use a very high
             // resultLimit to ensure an adequate number of type-checked results are returned and then only use the first few of them.
             // const possibleValues = Object.fromEntries(Object.entries(possibleValuesFull).slice(0, maxResults));
-            const hints = Object.entries(possibleValues).map(([curie, info]) => ({
+            const hints = Object.entries(possibleValues).sort(([_, result1], [__, result2]) => result2.score - result1.score).map(([curie, info]) => ({
               displayText: info.preferredLabel,
               text: info.preferredCurie,
               replaceText: whereValue
