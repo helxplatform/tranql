@@ -444,6 +444,7 @@ class App extends Component {
     // Fetch controllers
     this._queryController = new window.AbortController();
     this._autoCompleteController = new window.AbortController();
+    this._nameResController = new window.AbortController();
     // This is a tracking symbol used to detect if a new autocomplete call has been opened.
     // It it used to prevent stale autocompletion calls from writing to the codemirror state.
     this._autoCompleteInstance = Symbol();
@@ -1226,16 +1227,19 @@ class App extends Component {
    * @param {string} conceptValue - The value of the concept, e.g., "asthma" or "asth". If this param is a less than two characters, the method will return an empty object.
    * @param {string} conceptType - The concept itself, e.g., "disease" or "chemical_substance"
    * @param {number} [resultLimit=50] - Limit the number of identifiers that will be returned from a concept value. The actual number of results returned by the method will be equal to or less than this after type filtratiion.
+   * @param {number} [returnLimit=50] - Limit the final number of results returned and cached by the function. By specifying the actual number of results that are required to be returned, it helps cut down on storage usage in caching.
    * 
    * @throws {TypeError} Failure to fetch from APIs. Should be handled properly by caller.
    * @private
    */
-  async _resolveIdentifiersFromConcept(conceptValue, conceptType, resultLimit=50, ignoreCache=false) {
-    // Short strings are not well-supported by the name resolution API, so return no results.
-    if (conceptValue.length <= 2) return {};
+  async _resolveIdentifiersFromConcept(conceptValue, conceptType, resultLimit=50, returnLimit=50, ignoreCache=false) {
+    this._nameResController.abort();
+    this._nameResController = new window.AbortController();
+    
     if (!ignoreCache) {
       // Find any cahced results that have the same type as `conceptType` and have a label that starts with `conceptValue`.
       const results = Object.entries(this._autocompleteResolvedIdentifiers).filter(([curie, data]) => {
+        return data._searchConceptType === conceptType && data._searchConceptValue === conceptValue;
         return (
           // data._searchConceptType && data._searchConceptType.startsWith(conceptType) &&
           // data._searchConceptValue && data._searchConceptValue.startsWith(conceptValue) &&
@@ -1247,13 +1251,16 @@ class App extends Component {
       });
       if (results.length > 0) return Object.fromEntries(results);
     }
+    // Short strings are not well-supported by the name resolution API, so return no results.
+    if (conceptValue.length < 3) return {};
     const args = {
       limit: resultLimit,
       // offset: resultOffset,
       string: conceptValue
     };
     const res = await fetch(this.nameResolutionURL + '/lookup?' + qs.stringify(args), {
-      method: "POST"
+      method: "POST",
+      signal: this._nameResController.signal
     });
     /*
     interface NameResolutions {
@@ -1292,17 +1299,19 @@ class App extends Component {
           preferredLabel: result["id"]["label"],
           // Node normalization returns its "preferred" curie for the term
           preferredCurie: result["id"]["identifier"],
+          score: 1, 
           // Name resolutions also returns a whole bunch of synonyms for the same curie
-          otherLabels: nameResolutions[curie],
-          equivalentIdentifiers: result["equivalent_identifiers"],
+          /* Uses up too much space when caching */
+          // otherLabels: nameResolutions[curie],
+          // equivalentIdentifiers: result["equivalent_identifiers"],
           type: result["type"],
           _searchConceptValue: conceptValue,
           _searchConceptType: conceptType
         };
       }
     }
-    this._updateResolvedIdentifiers(filtered);
-    return filtered;
+    this._updateResolvedIdentifiers(filtered, returnLimit);
+    return Object.fromEntries(Object.entries(filtered).slice(0, returnLimit));
   }
   /**
    * Very similar to `_resolveIdentifiersFromConcept`, except that is designed for use with a curie instead of a name & biolink type.
@@ -1330,16 +1339,29 @@ class App extends Component {
       results[curie] = {
         preferredLabel: result["id"]["label"],
         preferredCurie: result["id"]["identifier"],
+        score: 1,
         // Not really necessary to query name-resolution for this method's use case.
-        otherLabels: [result["id"]["label"]],
-        equivalentIdentifiers: result["equivalent_identifiers"],
+        /* Too much space when caching */
+        // otherLabels: [result["id"]["label"]],
+        // equivalentIdentifiers: result["equivalent_identifiers"],
         type: result["type"]
       };
     }
-    this._updateResolvedIdentifiers(results);
+    this._updateResolvedIdentifiers(results, -1);
     return results;
   }
-  _updateResolvedIdentifiers(results) {
+  /**
+   * Caching mechanism used by _resolveIdentifiersFromConcept and _resolveIdentifiersFromCurie
+   * 
+   * @param {Object} results - Results returned from these methods.
+   * @param {Number} cacheLimit - Limit the number of results cached (where the highest scored results will be cached). Negative to disable.
+   */
+  _updateResolvedIdentifiers(results, cacheLimit=10) {
+    // Only cache `cacheLimit` results, since each result can take up upwards of a kB to store in localStorage,
+    // and each autocomplete can potentially result in hundreds of results being cached when no limit is set.
+    if (cacheLimit >= 0) {
+      results = Object.fromEntries(Object.entries(results).sort(([_, result1], [__, result2]) => result2.score - result1.score).slice(0, cacheLimit));
+    }
     // Add results to the cache.
     this._autocompleteResolvedIdentifiers = { ...results, ...this._autocompleteResolvedIdentifiers };
     localStorage.setItem('autocompleteIdentifiers', JSON.stringify(this._autocompleteResolvedIdentifiers));

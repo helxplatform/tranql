@@ -594,12 +594,12 @@ export default function autoComplete () {
            try {
             const maxResults = 10;
             setLoading(true);
-            const possibleValuesFull = await this._resolveIdentifiersFromConcept(whereValue, whereConcept, 250);
+            const possibleValues = await this._resolveIdentifiersFromConcept(whereValue, whereConcept, 250, maxResults);
             setLoading(false);
             // resultLimit limits the number of results that can be returned by name resolution (typeless) but these results are then
             // culled by type-checking them, meaning there'll be much less than `resultLimit` results. Thus, we'll use a very high
             // resultLimit to ensure an adequate number of type-checked results are returned and then only use the first few of them.
-            const possibleValues = Object.fromEntries(Object.entries(possibleValuesFull).slice(0, maxResults));
+            // const possibleValues = Object.fromEntries(Object.entries(possibleValuesFull).slice(0, maxResults));
             const hints = Object.entries(possibleValues).map(([curie, info]) => ({
               displayText: info.preferredLabel,
               text: info.preferredCurie,
