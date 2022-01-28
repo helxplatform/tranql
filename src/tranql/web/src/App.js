@@ -1230,9 +1230,23 @@ class App extends Component {
    * @throws {TypeError} Failure to fetch from APIs. Should be handled properly by caller.
    * @private
    */
-  async _resolveIdentifiersFromConcept(conceptValue, conceptType, resultLimit=50) {
+  async _resolveIdentifiersFromConcept(conceptValue, conceptType, resultLimit=50, ignoreCache=false) {
     // Short strings are not well-supported by the name resolution API, so return no results.
     if (conceptValue.length <= 2) return {};
+    if (!ignoreCache) {
+      // Find any cahced results that have the same type as `conceptType` and have a label that starts with `conceptValue`.
+      const results = Object.entries(this._autocompleteResolvedIdentifiers).filter(([curie, data]) => {
+        return (
+          // data._searchConceptType && data._searchConceptType.startsWith(conceptType) &&
+          // data._searchConceptValue && data._searchConceptValue.startsWith(conceptValue) &&
+          data.type.some((type) => this._categoryToType(type) === conceptType) && (
+            data.preferredLabel.startsWith(conceptValue) ||
+            data.otherLabels.some((label) => label.startsWith(conceptValue))
+          )
+        );
+      });
+      if (results.length > 0) return Object.fromEntries(results);
+    }
     const args = {
       limit: resultLimit,
       // offset: resultOffset,
@@ -1280,7 +1294,10 @@ class App extends Component {
           preferredCurie: result["id"]["identifier"],
           // Name resolutions also returns a whole bunch of synonyms for the same curie
           otherLabels: nameResolutions[curie],
-          equivalentIdentifiers: result["equivalent_identifiers"]
+          equivalentIdentifiers: result["equivalent_identifiers"],
+          type: result["type"],
+          _searchConceptValue: conceptValue,
+          _searchConceptType: conceptType
         };
       }
     }
@@ -1315,7 +1332,8 @@ class App extends Component {
         preferredCurie: result["id"]["identifier"],
         // Not really necessary to query name-resolution for this method's use case.
         otherLabels: [result["id"]["label"]],
-        equivalentIdentifiers: result["equivalent_identifiers"]
+        equivalentIdentifiers: result["equivalent_identifiers"],
+        type: result["type"]
       };
     }
     this._updateResolvedIdentifiers(results);
