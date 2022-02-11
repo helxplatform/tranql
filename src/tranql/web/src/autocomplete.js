@@ -1,7 +1,10 @@
 import * as CodeMirror from 'codemirror';
+import retry from 'async-retry';
 
 require('./codemirror-tooltip-extension/text-hover.js');
 require('./codemirror-tooltip-extension/text-hover.css');
+
+const NO_ERROR_MESSAGE = true;
 
 /**
 * Callback for handling autocompletion within the query editor.
@@ -112,6 +115,11 @@ export default function autoComplete () {
  const setError = (resultText, status, errors, resultOptions) => {
    // Prevent writing from stale calls.
    if (isAutocompletionClosed()) return;
+   if (NO_ERROR_MESSAGE) {
+    // Simply close the autocomplete prompt without any messages.
+    codeMirror.closeHint();
+    return;
+   }
    if (typeof resultOptions === "undefined") resultOptions = {};
    codeMirror.showHint({
      hint: function() {
