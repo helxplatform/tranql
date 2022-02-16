@@ -1,5 +1,4 @@
 import * as CodeMirror from 'codemirror';
-import retry from 'async-retry';
 
 require('./codemirror-tooltip-extension/text-hover.js');
 require('./codemirror-tooltip-extension/text-hover.css');
