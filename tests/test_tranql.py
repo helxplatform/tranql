@@ -2280,3 +2280,56 @@ def test_query_timeout(GraphInterfaceMock):
             # Check if gi_mock.answer is called
             # note there is also an assert in that method to check if it's called with the right timeout from env
             assert gi_mock.is_called
+
+def test_redis_graph_query_use_cached_response():
+    """
+    Test for case where redis returns empty result. when the from clause is "/schema"
+
+    """
+    mock_schema_yaml = {
+        'schema':{
+            'redis': {
+                'doc': 'Red is a color but REDIS?',
+                'url': 'redis:',
+                'redis': True,
+                'redis_connection_params': {
+                    'host': 'local',
+                    'port': 6379
+                }
+            }
+        }
+    }
+
+    class graph_Inteface_mock:
+        def __init__(self):
+            self.get_schema_called =False
+            self.answer_trapi_question_called =False
+            self.summary = {}
+        def get_schema(self, force_update=False):
+            self.get_schema_called = True
+            return {}
+
+        async def answer_trapi_question(self, message, options={}):
+            self.answer_trapi_question_called = True
+            return {}
+    # we override the schema
+    gi_mock = graph_Inteface_mock()
+    with patch('PLATER.services.util.graph_adapter.GraphInterface.instance',gi_mock ):
+        tranql = TranQL()
+        with patch('yaml.safe_load', lambda x: copy.deepcopy(mock_schema_yaml)):
+            # clean up schema singleton
+            update_interval = 1
+            backplane = 'http://localhost:8099'
+            os.environ['SCHEMA_CACHE_PATH'] = 'test-path'
+            schema_factory = SchemaFactory(
+                backplane=backplane,
+                use_registry=False,
+                update_interval=update_interval,
+                create_new=True,
+                tranql_config={}
+            )
+            assert schema_factory.redis_schema_cache_dir == os.environ['SCHEMA_CACHE_PATH']
+            tranql.schema = schema_factory.get_instance()
+
+
+

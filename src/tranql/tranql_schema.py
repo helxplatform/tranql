@@ -182,10 +182,43 @@ class RedisAdapter:
             tranql_config=tranql_config
         )
 
-    def get_schema(self, name):
+    def get_schema(self, name, schema_cache_dir, redo_schema):
+        # Caching works iff schema_cache_dir is passed else will operate in previous way.
         gi: GraphInterface = self._get_adapter(name)
-        schema = gi.get_schema(force_update=True)
+        schema = None
+        if schema_cache_dir:
+            data = self.get_schema_from_file(name=name, schema_cache_dir=schema_cache_dir)
+            if data:
+                schema = data['schema']
+                gi.instance.summary = data['summary']
+        # do schema compute if redo is ordered if not do it only when there's no cached schema
+        if redo_schema or not schema:
+            schema = gi.get_schema(force_update=True)
+            summary = gi.instance.summary
+            # save it to file
+            if schema_cache_dir:
+                self.write_schema_to_file(name, schema_cache_dir, schema, summary)
         return schema
+
+    def write_schema_to_file(self, name, schema_cache_dir, schema, summary):
+        if not os.path.exists(schema_cache_dir):
+            os.makedirs(schema_cache_dir, exist_ok=True)
+        file_name = os.path.join(schema_cache_dir, name + '.json')
+        with open(file_name,'w') as stream:
+            json.dump({"schema" : schema, "summary": summary}, stream)
+
+    def get_schema_from_file(self, name, schema_cache_dir):
+        file_name = os.path.join(schema_cache_dir, name + '.json')
+        if os.path.exists(file_name):
+            try:
+                with open(file_name) as stream:
+                    return json.load(stream)
+            except Exception as e:
+                logger.error(f"Error reading redis schema from schema cache file {file_name}")
+                logger.error(e)
+        else:
+            logger.error(f"Schema cache file {file_name}, doesn't exist.")
+        return None
 
 
 class SchemaFactory:
@@ -208,27 +241,39 @@ class SchemaFactory:
         self.tranql_config = tranql_config
         self.create_new = create_new
         self.skip_redis = skip_redis
-
+        self.redis_schema_cache_dir = os.environ.get("SCHEMA_CACHE_PATH")
         if not SchemaFactory._cached or create_new:
-            SchemaFactory._cached = Schema(backplane, use_registry, tranql_config, skip_redis=skip_redis)
+            # if
+            SchemaFactory._cached = Schema(backplane,
+                                           use_registry,
+                                           tranql_config,
+                                           skip_redis=skip_redis,
+                                           redis_schema_cache_dir=self.redis_schema_cache_dir,
+                                           redo_redis_schema=False)
 
         if not SchemaFactory._update_thread:
             # avoid creating multiple threads.
             SchemaFactory._update_thread = threading.Thread(
                 target=SchemaFactory.update_cache_loop,
-                args=(backplane, use_registry, tranql_config, skip_redis, update_interval),
+                args=(backplane, use_registry, tranql_config, skip_redis, self.redis_schema_cache_dir, update_interval),
                 daemon=True)
             SchemaFactory._update_thread.start()
 
     def get_instance(self, force_update=False):
-        if force_update:
-            SchemaFactory._cached = Schema(self.backplane, self.use_registry, self.tranql_config, self.skip_redis)
+        if str(force_update).lower() == "true":
+            # on force update we will re populate redis schema. Useful when graph is rebuilt, and we want to
+            # recompute the schema. After this call this will be the latest.
+            # this is exposed on GET tranql/schema?force_update=True
+            SchemaFactory._cached = Schema(self.backplane, self.use_registry, self.tranql_config, self.skip_redis,
+                                           self.redis_schema_cache_dir, redo_redis_schema=True
+                                            )
         return copy.deepcopy(SchemaFactory._cached)
 
     @staticmethod
-    def update_cache_loop(backplane, use_registry, tranql_config, skip_redis, update_interval=20*60):
+    def update_cache_loop(backplane, use_registry, tranql_config, skip_redis, redis_schema_cache_dir, update_interval=20*60):
         while True:
-            SchemaFactory._cached = Schema(backplane, use_registry, tranql_config, skip_redis)
+            SchemaFactory._cached = Schema(backplane, use_registry, tranql_config, skip_redis,
+                                           redis_schema_cache_dir=redis_schema_cache_dir)
             print('sleeping..... ')
             time.sleep(update_interval)
 
@@ -236,7 +281,7 @@ class SchemaFactory:
 class Schema:
     """ A schema for a distributed knowledge network. """
 
-    def __init__(self, backplane, use_registry, tranql_config, skip_redis=False):
+    def __init__(self, backplane, use_registry, tranql_config, skip_redis=False, redis_schema_cache_dir=None, redo_redis_schema=False):
         """
         Create a metadata map of the knowledge network.
         """
@@ -258,7 +303,9 @@ class Schema:
             if metadata.get('redis', False) and not skip_redis:
                 redis_adapter = RedisAdapter()
                 redis_adapter.set_adapter(schema_name, metadata.get('redis_connection_params'), tranql_config)
-                metadata['schema'] = self.snake_case_schema(redis_adapter.get_schema(schema_name))
+                metadata['schema'] = self.snake_case_schema(redis_adapter.get_schema(schema_name,
+                                                                                     schema_cache_dir=redis_schema_cache_dir,
+                                                                                     redo_schema=redo_redis_schema))
             if 'registry' in metadata:
                 if use_registry:
                     registry_name = metadata['registry']
