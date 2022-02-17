@@ -3,6 +3,8 @@ import * as CodeMirror from 'codemirror';
 require('./codemirror-tooltip-extension/text-hover.js');
 require('./codemirror-tooltip-extension/text-hover.css');
 
+const NO_ERROR_MESSAGE = true;
+
 /**
 * Callback for handling autocompletion within the query editor.
 * 
@@ -112,6 +114,11 @@ export default function autoComplete () {
  const setError = (resultText, status, errors, resultOptions) => {
    // Prevent writing from stale calls.
    if (isAutocompletionClosed()) return;
+   if (NO_ERROR_MESSAGE) {
+    // Simply close the autocomplete prompt without any messages.
+    codeMirror.closeHint();
+    return;
+   }
    if (typeof resultOptions === "undefined") resultOptions = {};
    codeMirror.showHint({
      hint: function() {
@@ -594,13 +601,13 @@ export default function autoComplete () {
            try {
             const maxResults = 10;
             setLoading(true);
-            const possibleValuesFull = await this._resolveIdentifiersFromConcept(whereValue, whereConcept, 250);
+            const possibleValues = await this._resolveIdentifiersFromConcept(whereValue, whereConcept, 250, maxResults);
             setLoading(false);
             // resultLimit limits the number of results that can be returned by name resolution (typeless) but these results are then
             // culled by type-checking them, meaning there'll be much less than `resultLimit` results. Thus, we'll use a very high
             // resultLimit to ensure an adequate number of type-checked results are returned and then only use the first few of them.
-            const possibleValues = Object.fromEntries(Object.entries(possibleValuesFull).slice(0, maxResults));
-            const hints = Object.entries(possibleValues).map(([curie, info]) => ({
+            // const possibleValues = Object.fromEntries(Object.entries(possibleValuesFull).slice(0, maxResults));
+            const hints = Object.entries(possibleValues).sort(([_, result1], [__, result2]) => result2.score - result1.score).map(([curie, info]) => ({
               displayText: info.preferredLabel,
               text: info.preferredCurie,
               replaceText: whereValue
