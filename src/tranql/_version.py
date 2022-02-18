@@ -1,1 +1,1 @@
-__version__ = "0.4.dev-bmt-fix"
+__version__ = "0.4.dev3"
