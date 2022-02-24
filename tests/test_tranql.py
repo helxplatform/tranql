@@ -11,7 +11,7 @@ import yaml
 from tests.mocks import MockHelper
 from tests.mocks import MockMap
 from tests.util import assert_lists_equal, set_mock, ordered
-from tranql.main import TranQL
+from tranql.main import TranQL, TranQLIncompleteParser
 from tranql.tranql_ast import SetStatement, SelectStatement, custom_functions
 from tranql.tranql_schema import SchemaFactory
 from tranql.utils.merge_utils import connect_knowledge_maps, find_all_paths
@@ -322,6 +322,177 @@ def test_parse_query_with_repeated_concept (GraphInterfaceMock, requests_mock):
               ["$.knowledge_graph.nodes.[*].id","as","diagnoses"]
              ]
             ]])
+
+######################################################################################
+# TranQLIncompleteParser tests. For /tranql/parse_incomplete autocompletion endpoint #
+######################################################################################
+
+"""
+Helper function used by tests for TranQLIncompleteParser to cut down on the boilerplate required in each test scenario.
+"""
+def _test_parse_incomplete(program, expected):
+    parser = TranQLIncompleteParser (None)
+    parsed = parser.tokenize(program)
+    result = parsed.asList()
+    assert_lists_equal(result, expected)
+
+#######################
+# Select clause tests #
+#######################
+def test_parse_incomplete_select_clause():
+    _test_parse_incomplete(
+        """select gene-[affects_expression_of]->protein->disease<-[treats]-phenotypic_feature""",
+        [[
+            [
+                "select",
+                "gene",
+                ["-[", "affects_expression_of", "]->"],
+                "protein",
+                "->",
+                "disease",
+                ["<-[", "treats", "]-"],
+                "phenotypic_feature"
+            ]
+        ]]
+    )
+    _test_parse_incomplete(
+        """select gene-""",
+        [[
+            [
+                "select",
+                "gene",
+                "-"
+            ]
+        ]]
+    )
+    _test_parse_incomplete(
+        """select gene-[""",
+        [[
+            [
+                "select",
+                "gene",
+                ["-["]
+            ]
+        ]]
+    )
+    _test_parse_incomplete(
+        """select gene-[affects""",
+        [[
+            [
+                "select",
+                "gene",
+                ["-[", "affects"]
+            ]
+        ]]
+    )
+    _test_parse_incomplete(
+        """select """,
+        [[
+            [
+                "select",
+            ]
+        ]]
+    )
+
+#####################
+# From clause tests #
+#####################
+def test_parse_incomplete_from_clause():
+    _test_parse_incomplete(
+        """
+        select gene->disease
+         from "/schema"
+        """,
+        [[
+            ["select", "gene", "->", "disease", "\n"],
+            ["from", [["/schema"]]]
+        ]]
+    )
+    _test_parse_incomplete(
+        """
+        select gene->disease
+         from "/schema
+        """,
+        [[
+            ["select", "gene", "->", "disease", "\n"],
+            ["from", [['"', "/schema"]]]
+        ]]
+    )
+    _test_parse_incomplete(
+        """
+        select gene->disease
+         from
+        """,
+        [[
+            ["select", "gene", "->", "disease", "\n"],
+            ["from"]
+        ]]
+    )
+
+######################
+# Where clause tests #
+######################
+def test_parse_incomplete_where_clause():
+    _test_parse_incomplete(
+        """
+        select gene->disease
+          from "/schema"
+         where disease="asth"
+        """,
+        [[
+            ["select", "gene", "->", "disease", "\n"],
+            ["from", [["/schema"]]],
+            ["where", ["disease", "=", "asth"]]
+        ]]   
+    )
+    _test_parse_incomplete(
+        """
+        select gene->disease
+          from "/schema"
+         where disease="asth
+        """,
+        [[
+            ["select", "gene", "->", "disease", "\n"],
+            ["from", [["/schema"]]],
+            ["where", ["disease", "=", ['"', "asth"]]]
+        ]]   
+    )
+    _test_parse_incomplete(
+        """
+        select gene->disease
+          from "/schema"
+         where disease=
+        """,
+        [[
+            ["select", "gene", "->", "disease", "\n"],
+            ["from", [["/schema"]]],
+            ["where", ["disease", "="]]
+        ]]   
+    )
+    _test_parse_incomplete(
+        """
+        select gene->disease
+          from "/schema"
+         where disease
+        """,
+        [[
+            ["select", "gene", "->", "disease", "\n"],
+            ["from", [["/schema"]]],
+            ["where", ["disease"]]
+        ]]   
+    )
+    _test_parse_incomplete(
+        """
+        select gene->disease
+          from "/schema"
+         where 
+        """,
+        [[
+            ["select", "gene", "->", "disease", "\n"],
+            ["from", [["/schema"]]],
+            ["where"]
+        ]]   
+    )
 
 #####################################################
 #
@@ -1919,6 +2090,7 @@ def test_redis_graph_cypher_options(GraphInterfaceMock):
             self.limit = limit
             self.skip  = skip
             self.options_set = options_set
+            self.summary = {}
 
         async def answer_trapi_question(self, message, options={}, timeout=0):
             assert message
@@ -1990,6 +2162,7 @@ def test_redis_graph_query_redis_schema_empty_response():
         def __init__(self):
             self.get_schema_called =False
             self.answer_trapi_question_called =False
+            self.summary = {}
         def get_schema(self, force_update=False):
             self.get_schema_called = True
             return {}
@@ -2060,6 +2233,7 @@ def test_query_timeout(GraphInterfaceMock):
             self.options_set = options_set
             self.answer_trapi_question
             self.is_called = False
+            self.summary = {}
 
         def get_schema(self, *args, **kwargs):
             return {

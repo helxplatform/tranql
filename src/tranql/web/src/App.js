@@ -14,7 +14,7 @@ import { IoIosArrowDropupCircle, IoIosArrowDropdownCircle, IoIosSwap, IoMdBrowse
 import {
   FaCog, FaDatabase, FaQuestionCircle, FaSearch, FaHighlighter, FaEye,
   FaSpinner, FaMousePointer, FaTimes, FaFolderOpen, FaFileImport, FaFileExport,
-  FaArrowsAlt, FaTrash, FaPlayCircle, FaTable, FaCopy, FaPython
+  FaArrowsAlt, FaTrash, FaPlayCircle, FaTable, FaCopy, FaPython, FaFrown
 } from 'react-icons/fa';
 // import { Tab, Tabs, TabList, TabPanel } from 'react-tabs';
 import 'react-confirm-alert/src/react-confirm-alert.css';
@@ -25,27 +25,30 @@ import DefaultTooltipContent from 'recharts/lib/component/DefaultTooltipContent'
 import ReactTooltip from 'react-tooltip';
 import { NotificationContainer , NotificationManager } from 'react-notifications';
 import 'react-notifications/lib/notifications.css';
-import { Range } from 'rc-slider';
 import { GridLoader } from 'react-spinners';
 import SplitPane from 'react-split-pane';
 import Cache from './Cache.js';
+import TranQLEmbedded, { EmbedMode } from './TranQLEmbedded.js';
 import AnswerViewer from './AnswerViewer.js';
+import GammaViewer from './GammaViewer.js';
 import QueriesModal from './QueriesModal.js';
 import HistoryViewer from './HistoryViewer.js';
 import BrowseNodeInterface from './BrowseNodeInterface.js';
 import Legend from './Legend.js';
-import TableViewer from './TableViewer.js';
+import { AppTableViewer } from './TableViewer.js';
 import HelpModal, { ToolbarHelpModal } from './HelpModal.js';
 import ImportExportModal from './ImportExportModal.js';
+import SettingsModal from './SettingsModal.js';
 import confirmAlert from './confirmAlert.js';
 import highlightTypes from './highlightTypes.js';
-import { shadeColor, adjustTitle, hydrateState, formatBytes } from './Util.js';
-import { Toolbar, Tool, /*ToolGroup*/ } from './Toolbar.js';
+import { shadeColor, adjustTitle, hydrateState, formatBytes, debounce } from './Util.js';
+import { AppToolbar, Tool, /*ToolGroup*/ } from './Toolbar.js';
 import LinkExaminer from './LinkExaminer.js';
 // import FindTool from './FindTool.js';
 import FindTool2 from './FindTool2.js';
 import Message from './Message.js';
 import Chain from './Chain.js';
+import autoComplete, { TooltipExtension } from './autocomplete.js';
 import ContextMenu from './ContextMenu.js';
 import GraphSerializer from './GraphSerializer.js';
 import { RenderInit, RenderSchemaInit, IdFilter, LegendFilter, LinkFilter, NodeFilter, ReasonerFilter, SourceDatabaseFilter, CurvatureAdjuster } from './Render.js';
@@ -54,10 +57,13 @@ import 'rc-slider/assets/index.css';
 import "react-table/react-table.css";
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { Controlled as CodeMirror } from 'react-codemirror2';
+import { getCurieFromCMToken } from './codemirror-tooltip-extension/text-hover.js';
 import 'codemirror/mode/sql/sql';
 import 'codemirror/addon/hint/show-hint.css'; // without this css hints won't show
 import './App.css';
 import 'abortcontroller-polyfill/dist/polyfill-patch-fetch.js';
+
+/* Setup codemirror */
 require('create-react-class');
 require('codemirror/addon/hint/show-hint');
 require('codemirror/addon/hint/sql-hint');
@@ -90,16 +96,11 @@ class App extends Component {
   constructor(props) {
     /* Create state elements and initialize configuration. */
     super(props);
-    if(process.env.NODE_ENV === 'development') {
-      this.tranqlURL = "http://localhost:8001";
-    }
-    if(process.env.NODE_ENV === 'production') {
-      // behind proxy this would treat the path used to load index.html as root
-      this.tranqlURL = window.location.href.endsWith('/') ? window.location.href.substring(0, window.location.href.length - 1 ) : window.location.href.length ;
-    }
     //this.tranqlURL = window.location.origin;
     //this.tranqlURL = "http://localhost:8001"; // dev only
     this.robokop_url = "https://robokop.renci.org";
+    this.nameResolutionURL = "https://name-resolution-sri.renci.org";
+    this.nodeNormalizationURL = "https://nodenormalization-sri.renci.org/1.2";
     this._contextMenuId = "contextMenuId";
 
     // Query editor support.
@@ -107,25 +108,31 @@ class App extends Component {
     this._getModelConcepts = this._getModelConcepts.bind (this);
     this._getModelRelations = this._getModelRelations.bind (this);
     this._getReasonerURLs = this._getReasonerURLs.bind (this);
-    this._codeAutoComplete = this._codeAutoComplete.bind(this);
     this._updateCode = this._updateCode.bind (this);
     this._executeQuery = this._executeQuery.bind(this);
+    // For usage where the query is auto-executed on change (e.g., when embedded).
+    this._debouncedExecuteQuery = debounce(this._executeQuery, 1000);
     this._abortQuery = this._abortQuery.bind(this);
     this._configureMessage = this._configureMessage.bind (this);
     this._translateGraph = this._translateGraph.bind (this);
+    // Specifically for autocomplete
+    this._codeAutoComplete = autoComplete.bind(this);
+    this._resolveIdentifiersFromConcept = this._resolveIdentifiersFromConcept.bind(this);
 
     // Toolbar
     this._setNavMode = this._setNavMode.bind(this);
     this._setSelectMode = this._setSelectMode.bind(this);
-
-    this._getTools = this._getTools.bind(this);
-    this._getButtons = this._getButtons.bind(this);
 
     this._setHighlightTypesMode = this._setHighlightTypesMode.bind(this);
     this._highlightType = this._highlightType.bind(this);
     this.__highlightTypes = highlightTypes.bind(this);
 
     this._setConnectionExaminerActive = this._setConnectionExaminerActive.bind(this);
+
+    // Non-visualization components
+    this._renderCodemirror = this._renderCodemirror.bind (this);
+    this._renderBanner = this._renderBanner.bind (this);
+    this._renderAnswerViewer = this._renderAnswerViewer.bind (this);
 
     // The visualization
     this._renderForceGraph = this._renderForceGraph.bind (this);
@@ -175,7 +182,6 @@ class App extends Component {
     // Settings management
     this._handleUpdateSettings = this._handleUpdateSettings.bind (this);
     this._toggleCheckbox = this._toggleCheckbox.bind (this);
-    this._renderCheckboxes = this._renderCheckboxes.bind (this);
     this._hydrateState = hydrateState.bind (this);
     this._handleQueryString = this._handleQueryString.bind (this);
 
@@ -221,6 +227,14 @@ class App extends Component {
 
     // Cache graphs locally using IndexedDB web component.
     this._cache = new Cache ();
+
+    /**
+     * Specifies the way in which the embedded app should render (specified by the query string argument "embed").
+     * 
+     * Related: the property `embedded` is functionally equivalent to `this.embedMode !== EmbedMode.NONE`, which abstracts
+     * away from the embed mode functionality.
+     */
+    this.embedMode = EmbedMode.NONE;
 
     // Configure initial state.
     this.state = {
@@ -275,12 +289,13 @@ class App extends Component {
       // Set up CodeMirror settings.
       codeMirrorOptions : {
         lineNumbers: true,
-        mode: 'text/x-pgsql', //'text/x-pgsql',
+        mode: 'text/x-mysql', //'text/x-pgsql',
         tabSize: 2,
         readOnly: false,
         extraKeys: {
           'Ctrl-Space': this._codeAutoComplete
-        }
+        },
+        textHover: true
       },
       showCodeMirror : true,
 
@@ -383,117 +398,15 @@ class App extends Component {
 
       activeModal : null,
 
-      exampleQueries : [
-          {
-            title: 'Protein-Metabolite Interaction',
-            query:
-`-- What proteins are targetted by the metabolite KEGG:C00017?
-
-set metabolite = "KEGG:C00017"
-
-select metabolite->protein
-  from "/graph/rtx"
- where metabolite=$metabolite
-
-`
-        },
-        {
-          title: 'Chemical substances target genes that target asthma',
-          query:
-`-- Which chemical substances target genes that target asthma?
-select chemical_substance->gene->disease
-  from "/graph/gamma/quick"
- where disease="asthma"
-`
-        },
-        {
-          title: 'Usage of predicates to narrow results',
-          query:
-`-- Which chemical substances decrease activity of genes that contribute to asthma?
-select chemical_substance-[decreases_activity_of]->gene-[contributes_to]->disease
-  from "/graph/gamma/quick"
- where disease="asthma"
-`
-        },
-        {
-          title: 'Phenotypic Feature-Disease Association',
-          query:
-`-- What diseases are associated with the phenotypic feature HP:0005978?
-
-select phenotypic_feature->disease
-	from "/graph/rtx"
- where phenotypic_feature="HP:0005978"
-`
-        },
-        {
-          title: 'Drug-Disease Pair',
-          query:
-`--
--- Produce clinial outcome pathways for this drug disease pair.
---
-
-set drug = 'PUBCHEM:2083'
-set disease = 'MONDO:0004979'
-
-select chemical_substance->gene->anatomical_entity->phenotypic_feature<-disease
-  from '/graph/gamma/quick'
- where chemical_substance = $drug
-   and disease = $disease`
-        },
-        {
-          title: 'Drug Targets Gene',
-          query:
-`--
--- What drug targets some gene?
---
-
-set target_gene = 'HGNC:6871' --mapk1
-select chemical_substance->gene
-  from '/graph/gamma/quick'
- where gene = $target_gene`
-        },
-        {
-          title: 'Tissue-Disease Association',
-          query:
-`--
--- What tissue types are associated with [disease]?
---
-set disease = 'asthma'
-select disease->anatomical_feature->cell
-  from '/graph/gamma/quick'
- where disease = $disease
-`
-        },
-        {
-          title: 'Workflow 5 v3',
-          query:
-`--
--- Workflow 5
---
---   Modules 1-4: Chemical Exposures by Clinical Clusters
---      For ICEES cohorts, eg, defined by differential population
---      density, which chemicals are associated with these
---      cohorts with a p_value lower than some threshold?
---
---   Modules 5-*: Knowledge Graph Phenotypic Associations
---      For chemicals produced by steps 1-4, what phenotypes are
---      associated with exposure to these chemicals?
---
-
-SELECT population_of_individual_organisms->chemical_substance->gene->biological_process_or_activity<-phenotypic_feature
-  FROM "/schema"
- WHERE icees.table = 'patient'
-   AND icees.year = 2010
-   AND icees.cohort_features.AgeStudyStart = '0-2'
-   AND icees.feature.EstResidentialDensity < 1
-   AND icees.maximum_p_value = 1
-   AND chemical_substance !=~ '^(SCTID.*|rxcui.*|CAS.*|SMILES.*|umlscui.*)$'
-   AND icees.regex = "(MONDO|HP):.*""`
-        }
-      ]
+      exampleQueries : require("./static/app_data/example_queries.js"),
 
       //showAnswerViewer : true
+      // showAnswerViewerOnLoad: false
+      useLastUsedView: false
     };
+
+    // This is a cache that stores results from `this._resolveIdentifiersFromConcept` for use in codemirror tooltips.
+    this._autocompleteResolvedIdentifiers = {};
 
     /**
      * We want to reset the interval if user highlights again. Stores `id`:`interval` Structure was too complicated so it is now separated into two objects.
@@ -531,6 +444,10 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
     // Fetch controllers
     this._queryController = new window.AbortController();
     this._autoCompleteController = new window.AbortController();
+    this._nameResController = new window.AbortController();
+    // This is a tracking symbol used to detect if a new autocomplete call has been opened.
+    // It it used to prevent stale autocompletion calls from writing to the codemirror state.
+    this._autoCompleteInstance = Symbol();
 
     this._OVERLAY_X = 0;
     this._OVERLAY_Y = 0;
@@ -542,12 +459,16 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
     // Promises
     this.schemaPromise = new Promise(()=>{});
   }
+  get embedded() {
+    return this.embedMode !== EmbedMode.NONE;
+  }
   /**
    * Updates the queries contained within the cache viewer modal.
    *
    */
   _updateCacheViewer () {
     const updateQueryTitle = (query, queryTitle) => {
+      if (!this._cachedQueriesModal.current) return;
       query.data.title = queryTitle;
       this._cache.db.cache.update(query.id,query);
       /* Gets a bit messy here but since it's directly modifying a property of the object, and these objects are all formatted and stored in the ref's state, we have to work around it a bit. */
@@ -626,558 +547,49 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
     this.setState({
       code: newCode
     });
-  }
-  /**
-   * Callback for handling autocompletion within the query editor.
-   *
-   * @param {object} cm - The CodeMirror object.
-   * @private
-   */
-  _codeAutoComplete () {
-    // https://github.com/JedWatson/react-codemirror/issues/52
-    var codeMirror = this._codemirror;
-
-    // hint options for specific plugin & general show-hint
-    // 'tables' is sql-hint specific
-    // 'disableKeywords' is also sql-hint specific, and undocumented but referenced in sql-hint plugin
-    // Other general hint config, like 'completeSingle' and 'completeOnSingleClick'
-    // should be specified here and will be honored
-
-    // Shallow copy it.
-    const pos = Object.assign({}, codeMirror.getCursor());
-    const untrimmedPos = codeMirror.getCursor();
-    const textToCursorPositionUntrimmed = codeMirror.getRange({ line : 0, ch : 0 }, { line : pos.line, ch : pos.ch });
-    const textToCursorPosition = textToCursorPositionUntrimmed.trimRight();
-    const entireText = codeMirror.getValue();
-
-    // const splitLines = textToCursorPosition.split(/\r\n|\r|\n/);
-    // // Adjust the position after trimming to be on the correct line.
-    // pos.line = splitLines.length - 1;
-    // // Adjust the position after trimming to be on the correct char.
-    // pos.ch = splitLines[splitLines.length-1].length;
-
-    const setHint = function(options, noResultsTip) {
-      if (typeof noResultsTip === 'undefined') noResultsTip = true;
-      if (noResultsTip && options.length === 0) {
-        options.push({
-          text: String(''),
-          displayText:'No valid results'
-        });
-      }
-      const hintOptions = {
-        // tables: tables,
-        hint: function() {
-          return {
-            from: pos,
-            to: untrimmedPos,
-            list: options.map((option) => {
-              // Process custom options - `replaceText`
-              if (option.hasOwnProperty('replaceText')) {
-                let replaceText = option.replaceText;
-                let from = option.hasOwnProperty('from') ? option.from : pos;
-                let to = option.hasOwnProperty('to') ? option.to : untrimmedPos;
-
-                option.from = { line : from.line, ch : from.ch - replaceText.length };
-                option.to = { line : to.line, ch : to.ch};
-
-                if (replaceText.length > 0) {
-                  const trimmedLines = textToCursorPositionUntrimmed.trimRight().split(/\r\n|\r|\n/);
-                  const lastLine = trimmedLines[trimmedLines.length-1];
-                  option.from.line = trimmedLines.length - 1;
-                  option.from.ch = lastLine.length - replaceText.length;
-                }
-
-
-                delete option.replaceText;
-              }
-
-              return option;
-            })
-          };
-        },
-        disableKeywords: true,
-        completeSingle: false,
-        completeOnSingleClick: false
-      };
-
-      codeMirror.showHint(hintOptions);
-      // codeMirror.state.completionActive.pick = () => {
-      //   codeMirror.showHint({
-      //     hint: function() {
-      //       return {
-      //         from: pos,
-      //         to: pos,
-      //         list: [{
-      //           text: String(''),
-      //           displayText: 'foobar',
-      //           className: 'testing'
-      //         }]
-      //       };
-      //     },
-      //     disableKeywords: true,
-      //     completeSingle: false,
-      //   });
-      // }
-    }
-
-    const setError = (resultText, status, errors, resultOptions) => {
-      if (typeof resultOptions === "undefined") resultOptions = {};
-      codeMirror.showHint({
-        hint: function() {
-          return {
-            from: pos,
-            to: pos,
-            list: [{
-              text: String(''),
-              displayText: resultText,
-              className: 'autocomplete-result-error',
-              ...resultOptions,
-            }]
-          };
-        },
-        disableKeywords: true,
-        completeSingle: false,
-      });
-      if (typeof status !== "undefined" && typeof errors !== "undefined") {
-        codeMirror.state.completionActive.pick = () => {
-          this._handleMessageDialog (status, errors);
-        }
-      }
-    }
-
-    const setLoading = function(loading) {
-      if (loading) {
-        // text property has to be String('') because when it is '' (falsey) it refuses to display it.
-        codeMirror.showHint({
-          hint: function() {
-            return {
-              from: pos,
-              to: pos,
-              list: [{
-                text: String(''),
-                displayText: 'Loading',
-                className: 'loading-animation'
-              }]
-            };
-          },
-          disableKeywords: true,
-          completeSingle: false,
-        });
-      }
-      else {
-        codeMirror.closeHint();
-      }
-    }
 
     /**
-     * TODO:
-     * could try to see if its possible to have two select menus for predicates that also show concepts from the predicates
-     *    would look something like this image, when, for example, you pressed the right arrow or left clicked or something on a predicate:
-     *        https://i.imgur.com/LBsdrcq.png
-     * could somehow see if there's a way to have predicate suggestion work properly when there's a concept already following the predicate
-     *    Ex: 'select foo-[what_can_I_put_here?]->baz'
-     *    Would involve sending more of the query instead of cutting it off at cursor.
-     *    Then would somehow have to backtrack and locate which token the cursor's position translates to.
+     * Perform editor-related tasks upon query updating.
+     * Perform this on the callback (updated) state, so that the codemirror state is updated.
+     * 
      */
-
-    this._autoCompleteController.abort();
-    this._autoCompleteController = new window.AbortController();
-
-    setLoading(true);
-
-    fetch(this.tranqlURL + '/tranql/parse_incomplete', {
-      signal: this._autoCompleteController.signal,
-      method: "POST",
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify([textToCursorPositionUntrimmed, entireText])
-    }).then(res => res.json())
-      .then(async (parsedTree) => {
-        setLoading(false)
-
-        if (parsedTree.errors) {
-          // this._handleMessageDialog (parsedTree.status, parsedTree.errors);
-          setError("Failed to parse", parsedTree.status, parsedTree.errors);
-        }
-        else {
-          setLoading(true);
-          await this.schemaPromise;
-          setLoading(false);
-          const graph = this.state.schemaMessage.knowledge_graph;
-
-          // Recursviely removes any tokens that are linebreaks from a parsed tree.
-          const stripLinebreaks = function(tree) {
-            if (Array.isArray(tree)) {
-              return tree.filter((token) => stripLinebreaks(token));
-            }
-            else {
-              return tree.toString().match(/\r\n|\r|\n/) === null;
-            }
-          }
-
-          const incompleteTree = parsedTree[0];
-          const completeTree = parsedTree[1];
-
-          // Filter whitespace from the statements
-          const block = incompleteTree[incompleteTree.length-1].map((statement) => {
-            return stripLinebreaks(statement);
-          });
-          const completeBlock = completeTree[completeTree.length-1].map((statement) => {
-            return stripLinebreaks(statement);
-          });
-
-          const lastStatement = block[block.length-1];
-          const lastStatementComplete = completeBlock[block.length-1];
-
-          const statementType = lastStatement[0];
-
-          setLoading(true);
-          const fromOptions = await this.reasonerURLs;
-          setLoading(false);
-
-          fromOptions["/schema"] = "/schema";
-
-          const whereOptions = [
-            'testing',
-            'foobar'
-          ];
-
-          const concept_arrows = [
-            '->',
-            '<-'
-          ];
-
-          const all_arrows = [
-            '->',
-            '<-',
-            '-[',
-            '<-['
-          ];
-
-          const arrow_to_pred_arrow = (arrow) => {
-            return {
-              '->' : [
-                '-[',
-                '',
-                ']->'
-              ],
-              '<-' : [
-                '<-[',
-                '',
-                ']-'
-              ]
-            }[arrow];
-          }
-
-          const arrowToEmptyPredicate = (arrow) => {
-            return arrow_to_pred_arrow(arrow);
-          }
-
-          const isBackwardsPredicate = (predicate) => {
-            return predicate[0] === '<-[';
-          }
-
-          const toForwardPredicate = (predicate) => {
-            predicate[0] = '-[';
-            predicate[2] = ']->';
-            return predicate;
-          }
-
-          const completePredicate = (predicate) => {
-            if (isBackwardsPredicate (predicate)) {
-              predicate[2] = arrow_to_pred_arrow("<-")[2];
-            }
-            else {
-              predicate[2] = arrow_to_pred_arrow("->")[2];
-            }
-            return predicate;
-          }
-
-          const concept = (old_concept) => {
-            // Concept identifiers aren't actually parsed by the lexer, but rather the ast in Query::add.
-            // This just copies the methods that the ast uses to parse concept identifiers.
-            if (old_concept.indexOf(":") !== -1) {
-              const split = old_concept.split(":");
-              if (split.length - 1 > 1) {
-                throw new Error(`Invalid concept identifier "${old_concept}"`);
-              }
-              const [name, type_name] = split;
-              return type_name;
-            }
-            else {
-              return old_concept;
-            }
-          }
-
-          const lastToken = lastStatement[lastStatement.length-1];
-          const secondLastToken = lastStatement[lastStatement.length-2];
-          const thirdLastToken = lastStatement[lastStatement.length-3];
-
-          console.log(statementType, lastStatement, lastToken);
-
-          // Try/catch the entirety of the logic
-          try {
-          if (statementType === 'select') {
-            let validConcepts;
-            if (lastToken === "-") {
-              // Arrow suggestion
-              // "select foo-"
-              validConcepts = all_arrows.map((arrow) => {
-                return {
-                  displayText: arrow,
-                  text: arrow,
-                  replaceText: "-"
-                };
-              });
-            }
-            else if (Array.isArray(lastToken) && lastToken.length < 3) {
-              // If the last token is an array and not length 3 then it is an incomplete predicate.
-              // "select foo-[" or "select foo-[bar"
-              let currentPredicate = completePredicate([
-                lastToken[0],
-                lastToken[1] !== undefined ? lastToken[1] : ""
-              ]);
-              let previousConcept = concept(secondLastToken);
-              // May be undefined if there is no next concept
-              let has_no_next_concept = (lastStatementComplete.length - lastStatement.length) == 0;
-              let nextConcept = has_no_next_concept? undefined : concept(lastStatementComplete[lastStatement.length]) ;
-              // See https://github.com/frostyfan109/tranql/issues/117 for why this approach doesn't work
-
-
-
-              const backwards = isBackwardsPredicate (currentPredicate);
-
-              console.log ([previousConcept, currentPredicate, nextConcept]);
-
-              // Should replace this method with reduce
-
-              const allEdges = graph.edges.filter((edge) => {
-                if (backwards) {
-                  return edge.target_id === previousConcept &&
-                  (nextConcept === undefined || edge.source_id === nextConcept) &&
-                  edge.type.startsWith(currentPredicate[1]);
-                }
-                else {
-                  return (
-                    edge.source_id === previousConcept &&
-                    (nextConcept === undefined || edge.target_id === nextConcept) &&
-                    edge.type.startsWith(currentPredicate[1])
-                  );
-                }
-              });
-              const uniqueEdgeMap = {};
-              allEdges.forEach((edge) => {
-                if (!uniqueEdgeMap.hasOwnProperty(edge.type)) {
-                  uniqueEdgeMap[edge.type] = edge;
-                }
-              });
-              const uniqueEdges = Object.values(uniqueEdgeMap);
-              validConcepts = uniqueEdges.map((edge) => {
-                const replaceText = currentPredicate[1];
-                // const actualText = type + currentPredicate[2];
-                const conceptHint = " (" + (backwards ? edge.source_id : edge.target_id) + ")";
-                const actualText = edge.type;
-                const displayText = edge.type + conceptHint;
-                return {
-                  displayText: displayText,
-                  text: actualText,
-                  replaceText : replaceText
-                };
-              });
-            }
-            else {
-              // Otherwise, we are handling autocompletion of a concept.
-              let currentConcept = "";
-              let predicate = null;
-              let previousConcept = null;
-
-              if (lastToken === statementType) {
-                // "select"
-              }
-              else if (secondLastToken === statementType) {
-                // "select foo"
-                currentConcept = concept(lastToken);
-              }
-              else if (concept_arrows.includes(lastToken) || Array.isArray(lastToken)) {
-                // "select foo->" or "select foo-[bar]->"
-                predicate = lastToken;
-                previousConcept = concept(secondLastToken);
-              }
-              else {
-                previousConcept = concept(thirdLastToken);
-                predicate = secondLastToken;
-                currentConcept = concept(lastToken);
-              }
-
-
-              if (predicate === null) {
-                // Predicate will only be null if there are no arrows, and therefore the previousConcept is also null.
-                // Single concept - just "select" or "select foo" where the concept is either "" or "foo"
-                validConcepts = graph.nodes.filter((node) => node.type.startsWith(currentConcept)).map(node => node.type);
-              }
-              else {
-                // If there is a predicate, we have to factor in the previous concept, the predicate, and the current concept.
-                if (!Array.isArray(predicate)) {
-                  // We want to assign an empty predicate
-                  predicate = arrowToEmptyPredicate (predicate);
-                }
-
-                const backwards = isBackwardsPredicate (predicate);
-
-                console.log ([previousConcept, predicate, currentConcept]);
-                // Concepts could be named like select f1:foo->f2:bar
-                // we need to split them and grab the actual types
-                let previousConceptSplit = previousConcept.split(':');
-                let currentConceptSplit = currentConcept.split(':');
-                previousConcept = previousConceptSplit[previousConceptSplit.length - 1];
-                currentConcept = currentConceptSplit[currentConceptSplit.length - 1];
-                validConcepts = graph.edges.filter((edge) => {
-                  if (backwards) {
-                    return (
-                      edge.source_id.startsWith(currentConcept) &&
-                      edge.target_id === previousConcept &&
-                      (predicate[1] === "" || edge.type === predicate[1])
-                    );
-                  }
-                  else {
-                    return (
-                      edge.source_id === previousConcept &&
-                      edge.target_id.startsWith(currentConcept) &&
-                      (predicate[1] === "" || edge.type === predicate[1])
-                    );
-                  }
-                }).map((edge) => {
-                  if (backwards) {
-                    return edge.source_id;
-                  }
-                  else {
-                    return edge.target_id
-                  }
-                })
-              }
-              validConcepts = validConcepts.unique().map((concept) => {
-                return {
-                  displayText: concept,
-                  text: concept,
-                  replaceText: currentConcept
-                };
-              });
-            }
-            setHint(validConcepts);
-
-          }
-          else if (statementType === 'from') {
-            let currentReasonerArray = lastStatement[1];
-            let startingQuote = "";
-            if (currentReasonerArray === undefined) {
-              // Adds an apostrophe to the start of the string if it doesn't have one ("from")
-              startingQuote = "'";
-              currentReasonerArray = [[
-                "'",
-                ""
-              ]];
-            }
-            const endingQuote = currentReasonerArray[currentReasonerArray.length - 1][0];
-            const currentReasoner = currentReasonerArray[currentReasonerArray.length - 1][1];
-            // The select statement must be the first statement in the block, but thorough just in case.
-            // We also want to filter out whitespace that would be detected as a token.
-            const selectStatement = block.filter((statement) => statement[0] === "select")[0].filter((token) => {
-              return typeof token !== "string" || token.match(/\s/) === null;
-            });
-            // Don't want the first token ("select")
-            const tokens = selectStatement.slice(1);
-
-            let validReasoners = [];
-
-            Object.keys(fromOptions).forEach((reasoner) => {
-              let valid = true;
-              if (tokens.length === 1) {
-                // Handles if there's only one concept ("select foo")
-                const currentConcept = concept(tokens[0]);
-                graph.nodes.filter((node) => node.type.startsWith(currentConcept)).forEach(node => node.reasoner.forEach((reasoner) => {
-                  !validReasoners.includes(reasoner) && validReasoners.push(reasoner);
-                }));
-              }
-              else {
-                for (let i=0;i<tokens.length-2;i+=2) {
-                  const previousConcept = concept(tokens[i]);
-                  let predicate = tokens[i+1];
-                  const currentConcept = concept(tokens[i+2]);
-
-                  if (!Array.isArray(predicate)) {
-                    predicate = arrowToEmptyPredicate (predicate);
-                  }
-                  const backwards = isBackwardsPredicate (predicate);
-
-                  const isTransitionValid = graph.edges.filter((edge) => {
-                    if (backwards) {
-                      return (
-                        edge.source_id.startsWith(currentConcept) &&
-                        edge.target_id === previousConcept &&
-                        (predicate[1] === "" || edge.type === predicate[1]) &&
-                        (reasoner === "/schema" || edge.reasoner.includes(reasoner))
-                      );
-                    }
-                    else {
-                      return (
-                        edge.source_id === previousConcept &&
-                        edge.target_id.startsWith(currentConcept) &&
-                        (predicate[1] === "" || edge.type === predicate[1]) &&
-                        (reasoner === "/schema" || edge.reasoner.includes(reasoner))
-                      );
-                    }
-                  }).length > 0;
-                  if (!isTransitionValid) {
-                    valid = false;
-                    break;
-                  }
-                }
-                if (valid) {
-                  validReasoners.push(reasoner);
-                }
-              }
-            });
-
-            const validReasonerValues = validReasoners.map((reasoner) => {
-              return fromOptions[reasoner];
-            }).filter((reasonerValue) => {
-              return reasonerValue.startsWith(currentReasoner);
-            }).map((reasonerValue) => {
-              return {
-                displayText: reasonerValue,
-                text: startingQuote + reasonerValue,
-                // text: startingQuote + reasonerValue + endingQuote,
-                replaceText: currentReasoner
-              };
-            });
-
-            setHint(validReasonerValues);
-          }
-          else if (statementType === 'where') {
-
-          }
-          }
-          catch (e) {
-            setError('Failed to parse', 'Failed to parse', [{message: e.message, details: e.stack}]);
+    this.setState({}, () => {
+      const editor = this._codemirror;
+      if (!editor) return;
+      if (editor.state.completionActive) {
+        this._codeAutoComplete();
+      }
+      /* Traverse through each token in the editor and perform identifier resolution on it if it's a string representing a curie */
+      const lines = editor.lineCount();
+      for (let lineNumber=0; lineNumber<lines; lineNumber++) {
+        const tokens = editor.getLineTokens(lineNumber);
+        for (let i=0; i<tokens.length; i++) {
+          const currentToken = tokens[i];
+          if (currentToken.type === "string" && currentToken.string.includes(":")) {
+            // It really doesn't need to be a curie here, since it'll just return no results,
+            // but might as well check if there's a colon to avoid making unnecessary API requests.
+            // Also, enable returning cached results (from previous calls), since this will be run on every curie
+            // each time the codemirror query is changed.
+            this._resolveIdentifiersFromCurie(getCurieFromCMToken(currentToken.string)).catch(() => {}, false);
           }
         }
-      })
-      .catch((error) => {
-        if (error.name !== "AbortError") {
-          setError('Error', 'Error', [{message: error.message, details: error.stack}]);
-        }
-      });
+      }
+    });
+    /**
+     * Note that the debounced query execution in embedded mode still occurs in the codemirror's `onChange` callback.
+     * This is because initially loading the ?query param into the graph should execute *immediately*, not on a debounce,
+     * (and there are a couple other issues other than the immediate execution that arise from having it here related the ?query loading). 
+     */
   }
+  
   /**
    * Sets the active force graph
    *
    * @private
    */
   _setSchemaViewerActive (active) {
-    this._browseNodeInterface.current.hide();
-    this._linkExaminer.current.hide();
+    if (this._browseNodeInterface.current) this._browseNodeInterface.current.hide();
+    if (this._linkExaminer.current) this._linkExaminer.current.hide();
     this._closeObjectViewer();
 
     // Don't set state, thereby reloading the graph, if the schema viewer isn't enabled
@@ -1636,7 +1048,7 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
         node["id"] = id;
         if (node["category"] !== undefined && node["category"] !== null) {
           const catArr = node["category"];
-          console.log(`CATEGORY=[${catArr}]`);
+          // console.log(`CATEGORY=[${catArr}]`);
           let typeArr = catArr.map(this._categoryToType);
           node["type"] = typeArr;
         }
@@ -1674,7 +1086,7 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
       };
       message.knowledge_graph.edges = newLinkArray;
     };
-    this._configureMessage (message,false,false);
+    this._configureMessage (message,false,schema);
     this.setState({},() => {
       if (typeof noRenderChain === "undefined") noRenderChain = false;
       if (typeof schema === "undefined") schema = this.state.schemaViewerActive && this.state.schemaViewerEnabled;
@@ -1720,6 +1132,7 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
            if (result !== undefined) {
              console.log("Got schema from cache");
              let msg = result.data;
+             console.log(JSON.stringify(msg));
              const prevMsg = this.state.message;
              const prevRecord = this.state.record;
              this._configureMessage(msg,false,true);
@@ -1805,17 +1218,184 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
       )
   }
   /**
+   * Query name-resolution-sri to resolve ontological identifiers from concept names.
+   * For example, go from "asthma" -> ["MONDO:XXX", "MONDO:YYY", "DOID:ZZZ"]
+   * 
+   * As a side-effect, it caches these values in `state.autocompleteResolvedIdentifiers`
+   * for use in autocomplete tooltips.
+   * 
+   * @param {string} conceptValue - The value of the concept, e.g., "asthma" or "asth". If this param is a less than two characters, the method will return an empty object.
+   * @param {string} conceptType - The concept itself, e.g., "disease" or "chemical_substance"
+   * @param {number} [resultLimit=50] - Limit the number of identifiers that will be returned from a concept value. The actual number of results returned by the method will be equal to or less than this after type filtratiion.
+   * @param {number} [returnLimit=50] - Limit the final number of results returned and cached by the function. By specifying the actual number of results that are required to be returned, it helps cut down on storage usage in caching.
+   * 
+   * @throws {TypeError} Failure to fetch from APIs. Should be handled properly by caller.
+   * @private
+   */
+  async _resolveIdentifiersFromConcept(conceptValue, conceptType, resultLimit=50, returnLimit=50, ignoreCache=false) {
+    this._nameResController.abort();
+    this._nameResController = new window.AbortController();
+    
+    if (!ignoreCache) {
+      // Find any cahced results that have the same type as `conceptType` and have a label that starts with `conceptValue`.
+      const results = Object.entries(this._autocompleteResolvedIdentifiers).filter(([curie, data]) => {
+        return data._searchMetadata.some(([cachedConceptValue, cachedConceptType]) => cachedConceptValue === conceptValue && cachedConceptType === conceptType);
+        return data._searchConceptType === conceptType && data._searchConceptValue === conceptValue;
+        return (
+          // data._searchConceptType && data._searchConceptType.startsWith(conceptType) &&
+          // data._searchConceptValue && data._searchConceptValue.startsWith(conceptValue) &&
+          data.type.some((type) => this._categoryToType(type) === conceptType) && (
+            data.preferredLabel.startsWith(conceptValue) ||
+            data.otherLabels.some((label) => label.startsWith(conceptValue))
+          )
+        );
+      });
+      if (results.length > 0) return Object.fromEntries(results);
+    }
+    // Short strings are not well-supported by the name resolution API, so return no results.
+    if (conceptValue.length < 3) return {};
+    const args = {
+      limit: resultLimit,
+      // offset: resultOffset,
+      string: conceptValue
+    };
+    const res = await fetch(this.nameResolutionURL + '/lookup?' + qs.stringify(args), {
+      method: "POST",
+      signal: this._nameResController.signal
+    });
+    /*
+    interface NameResolutions {
+      [curie: string]: string[]
+    }
+    Where the strings in the array are names, i.e. {'MONDO:XXX': ["Asthma", "Asthmas", "Bronchial asthma", ...], ... }
+    */
+    const nameResolutions = await res.json();
+    // Now that we have name resolutions, we need to go through and only take the ones that are the same type as conceptType.
+    // For example, the conceptValue "a" could yield both "Asthma" (disease) and "Atrazine" (chemical_substance), but we only want diseases.
+    const filtered = {};
+    // The qs library does not seem to support the same type of qs list serialization as is expected by node norm, but URLSearchParams does.
+    const nodeNormArgs = new URLSearchParams();
+    Object.keys(nameResolutions).forEach((curie) => nodeNormArgs.append("curie", curie));
+    // Not entirely sure what this argument does, but it sounds like it merges results which we might not want. Probably inconsequential either way.
+    nodeNormArgs.append("conflate", false);
+    const nodeNormResults = await (await fetch(
+      this.nodeNormalizationURL + '/get_normalized_nodes?' + nodeNormArgs.toString()
+    )).json();
+    for (let i=0; i<Object.keys(nameResolutions).length; i++) {
+      const curie = Object.keys(nameResolutions)[i];
+      // nodeNormResults will return an object with only one key (`curie`) since we only query with one curie.
+      const result = nodeNormResults[curie];
+      if (result !== null) {
+        // The node normalization API doesn't support all curies that can be returned by the name resolution API.
+        // Unsupported curies will return a null object.
+        const isSameType = result["type"].some(type => this._categoryToType(type) === conceptType);
+        const includedCuries = Object.keys(filtered);
+        const includedEquivalentIdentifiers = result["equivalent_identifiers"].filter(({ identifier }) => includedCuries.includes(identifier));
+        if (includedEquivalentIdentifiers.length > 0) {
+          includedEquivalentIdentifiers.forEach((equivIdent) => {
+          });
+        }
+        else if (isSameType) filtered[curie] = {
+          // Node normalization returns its "preferred" label for the curie
+          preferredLabel: result["id"]["label"],
+          // Node normalization returns its "preferred" curie for the term
+          preferredCurie: result["id"]["identifier"],
+          score: 1, 
+          // Name resolutions also returns a whole bunch of synonyms for the same curie
+          /* Uses up too much space when caching */
+          // otherLabels: nameResolutions[curie],
+          // equivalentIdentifiers: result["equivalent_identifiers"],
+          type: result["type"],
+          _searchMetadata: [[conceptValue, conceptType]],
+        };
+      }
+    }
+    this._updateResolvedIdentifiers(filtered, returnLimit);
+    return Object.fromEntries(Object.entries(filtered).slice(0, returnLimit));
+  }
+  /**
+   * Very similar to `_resolveIdentifiersFromConcept`, except that is designed for use with a curie instead of a name & biolink type.
+   * This is made to be used so that whenever a user types a curie directly into the query, it can automatically resolve the English name for them.
+   * 
+   * @param {string} curie - A curie, e.g. "MONDO:0005240"
+   * @param {boolean=false} ignoreCache - When false, this method returns previously cached results for `curie`.
+   * 
+   */
+  async _resolveIdentifiersFromCurie(curie, ignoreCache=false) {
+    /** If caching is enabled and the curie results are cached, return the cached results */
+    if (!ignoreCache && this._autocompleteResolvedIdentifiers[curie]) {
+      const results = {};
+      results[curie] = this._autocompleteResolvedIdentifiers[curie];
+      return results;
+    }
+
+    const nodeNormResult = await (await fetch(
+      this.nodeNormalizationURL + '/get_normalized_nodes?' + qs.stringify({ curie })
+    )).json();
+    const result = nodeNormResult[curie];
+
+    const results = {};
+    if (result !== null) {
+      results[curie] = {
+        preferredLabel: result["id"]["label"],
+        preferredCurie: result["id"]["identifier"],
+        score: 1,
+        // Not really necessary to query name-resolution for this method's use case.
+        /* Too much space when caching */
+        // otherLabels: [result["id"]["label"]],
+        // equivalentIdentifiers: result["equivalent_identifiers"],
+        type: result["type"],
+        _searchMetadata: []
+      };
+    }
+    this._updateResolvedIdentifiers(results, -1);
+    return results;
+  }
+  /**
+   * Caching mechanism used by _resolveIdentifiersFromConcept and _resolveIdentifiersFromCurie
+   * 
+   * @param {Object} results - Results returned from these methods.
+   * @param {Number} cacheLimit - Limit the number of results cached (where the highest scored results will be cached). Negative to disable.
+   */
+  _updateResolvedIdentifiers(results, cacheLimit=10) {
+    // Only cache `cacheLimit` results, since each result can take up upwards of a kB to store in localStorage,
+    // and each autocomplete can potentially result in hundreds of results being cached when no limit is set.
+    if (cacheLimit >= 0) {
+      results = Object.fromEntries(Object.entries(results).sort(([_, result1], [__, result2]) => result2.score - result1.score).slice(0, cacheLimit));
+    }
+    // Add results to the cache.
+    Object.entries(results).forEach(([curie, result]) => {
+      const storedResult = this._autocompleteResolvedIdentifiers[curie];
+      if (storedResult) {
+        // Update result (newer data) with metadata from old result.
+        console.log("Updating result for ", curie);
+        result._searchMetadata = result._searchMetadata.concat(storedResult._searchMetadata);
+      }
+      console.log("Caching result for", curie)
+      // Store newest data in cache.
+      this._autocompleteResolvedIdentifiers[curie] = result;
+    });
+    localStorage.setItem('autocompleteIdentifiers', JSON.stringify(this._autocompleteResolvedIdentifiers));
+    // Update codemirror tooltips with new cached results.
+    this._codemirror.state.resolvedIdentifiers = this._autocompleteResolvedIdentifiers;
+  }
+  /**
    * Get the valid options in the `from` clause and their respective `reasoner` values
    *
    * @private
    */
   async _getReasonerURLs () {
-    const res = await fetch(this.tranqlURL + '/tranql/reasonerURLs', {
-      method: "GET",
-    })
-    const reasonerURLs = await res.json();
+    try {
+      const res = await fetch(this.tranqlURL + '/tranql/reasonerURLs', {
+        method: "GET",
+      })
+      const reasonerURLs = await res.json();
 
-    return reasonerURLs;
+      return reasonerURLs;
+    } catch {
+      // Fetch failed.
+      return [];
+    }
   }
   /**
    * Get the concept model and stores as state.
@@ -2052,6 +1632,20 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
    * @private
    */
   _updateFg () {
+    if (this.fg) {
+      // Performing actions such as dragging a node will reset fg.controls().enabled back to true automatically,
+      // thus it's necessary to hook into the TrackballControls and make sure that they're immediately re-disabled.
+      // *Currently disabled always.* 
+      if (this.embedded && false) {
+        const controls = this.fg.controls();
+        controls.enabled = false;
+        const _update = controls.update.bind(controls);
+        controls.update = (...args) => {
+          _update(...args);
+          if (controls.enabled === true) controls.enabled = false;
+        }
+      }
+    }
     // let graph = this.state.schemaViewerEnabled && this.state.schemaViewerActive ? this.state.schema : this.state.graph;
   }
   /**
@@ -2102,33 +1696,6 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
         this._translateGraph(newMessage,false,false);
       });
     }
-
-    // If the selected node/link is hidden we want to deselect it.
-    // this.setState({},() => {
-    //   if (this.state.selectedNode !== null) {
-    //     if (this.state.selectedNode.hasOwnProperty('node') && newMessage.graph.nodes.filter((node) => node.id === this.state.selectedNode.node.id).length === 0) {
-    //       delete this.state.selectedNode.node;
-    //       this._updateDimensions();
-    //     }
-    //     if (
-    //       this.state.selectedNode.hasOwnProperty('link') &&
-    //       (
-    //         newMessage.graph.nodes.filter((node) => (
-    //           node.id === this.state.selectedNode.link.source_id ||
-    //           node.id === this.state.selectedNode.link.target_id
-    //         )).length < 2 ||
-    //         newMessage.graph.links.filter((link) => (
-    //           link.origin.source_id === this.state.selectedNode.link.source_id &&
-    //           link.origin.target_id === this.state.selectedNode.link.target_id &&
-    //           JSON.stringify(link.origin.type) === JSON.stringify(this.state.selectedNode.link.type)
-    //         )).length === 0
-    //       )
-    //     ) {
-    //       delete this.state.selectedNode.link;
-    //       this._updateDimensions();
-    //     }
-    //   }
-    // })
   }
   /**
    * Handle a click on a graph node.
@@ -2170,8 +1737,86 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
   _fgAdjustCharge (charge) {
     if (this.fg) {
       this.fg.d3Force ('charge').strength(charge);
-      this.fg.refresh ();
+      if (this.fg.refresh) this.fg.refresh ();
     }
+  }
+  /**
+   * Render the Answer Viewer modal.
+   * 
+   */
+  _renderAnswerViewer (customProps) {
+    return (
+      <GammaViewer data={this.state.message}
+                   show={this.state.activeModal==="AnswerViewerModal"}
+                   onHide={() => this._setActiveModal(null)}
+                   {...customProps}/>
+    );
+  }
+  /**
+   * Renders the App banner/header element.
+   * 
+   */
+  _renderBanner() {
+    return (
+      <header className="App-header" >
+        <div id="headerContainer" className="no-select">
+          <p style={{display:"inline-block",flex:1}}>TranQL</p>
+          <Message activeModal={this.state.activeModal} ref={this._messageDialog} />
+          <GridLoader
+            css={spinnerStyleOverride}
+            id={"spinner"}
+            sizeUnit={"px"}
+            size={6}
+            color={'#2cbc12'}
+            loading={this.state.loading && (this.state.schemaViewerActive || !this.state.schemaViewerEnabled)} />
+          {
+            !this.state.toolbarEnabled &&
+              <Button id="navModeButton"
+                      outline
+                      color="primary" onClick={() => {this._setNavMode(!this.state.navigateMode); this._setSelectMode(!this.state.selectMode)}}>
+                { this.state.navigateMode && (this.state.visMode === '3D' || this.state.visMode === '2D') ? "Navigate" : "Select" }
+              </Button>
+          }
+          {
+            !this.state.loading ? (
+              <Button id="runButton"
+                      outline
+                      color="success" onClick={this._executeQuery}>
+                Run
+              </Button>
+            ) : (
+              <Button id="abortButton"
+                      outline
+                      color="danger" onClick={this._abortQuery}>
+                Cancel
+              </Button>
+            )
+          }
+          <div id="appControlContainer" style={{display:(this.state.toolbarEnabled ? "none" : "")}}>
+            <FaCog data-tip="Configure application settings" id="settings" className="App-control" onClick={() => this._setActiveModal("SettingsModal")} />
+            <FaPlayCircle data-tip="Answer Navigator - see each answer, its graph structure, links, knowledge source and literature provenance" id="answerViewer" className="App-control" onClick={this._handleShowAnswerViewer} />
+          </div>
+        </div>
+      </header>
+    );
+  }
+  /**
+   * Renders the codemirror query element.
+   * 
+   * @private
+   */
+  _renderCodemirror() {
+    return (
+      <CodeMirror editorDidMount={(editor)=>{this._codemirror = editor;}}
+                  className="query-code"
+                  value={this.state.code}
+                  onBeforeChange={(editor, data, code) => this._updateCode(code)}
+                  onChange={(editor) => {
+                    if (this.embedded) this._debouncedExecuteQuery();
+                  }}
+                  options={this.state.codeMirrorOptions}
+                  autoFocus={true} />
+    );
   }
   /**
    * Render the force directed graph in either 2D or 3D rendering modes.
@@ -2188,6 +1833,8 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
       height:this.state.graphHeight,
       linkAutoColorBy:"type",
       nodeAutoColorBy:"type",
+      linkDirectionalArrowLength: 3.5,
+      linkDirectionalArrowRelPos: 1,
       d3AlphaDecay:0.2,
       strokeWidth:10,
       linkWidth:2,
@@ -2275,77 +1922,12 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
   _renderForceGraphVR (data, props) {
       return <ForceGraphVR {...props} />
   }
-  /**
-  * Render the toolbar buttons
-  *
-  * @private
-  */
-  _getButtons() {
-    return (
-      <>
-      <FaPlayCircle data-tip="Answer Navigator - see each answer, its graph structure, links, knowledge source and literature provenance"
-                       id="answerViewerToolbar"
-                       className="App-control-toolbar fa"
-                       onClick={this._handleShowAnswerViewer} />
-      <FaSearch data-tip="Find tool - helps to quickly locate specific things in the graph" id="findTool" className="App-control-toolbar fa" onClick={() => this._findTool.current.toggleShow()}/>
-      <FaQuestionCircle data-tip="Help & Information" id="helpButton" className="App-control-toolbar fa" onClick={() => this._setActiveModal('HelpModal')}/>
-      <FaDatabase data-tip="Cache Viewer - search through previous queries" id="cachedQueriesButton" className="App-control-toolbar fa" onClick={() => this._setActiveModal('CachedQueriesModal')}/>
-      <FaFolderOpen data-tip="Import/Export - Import or export graphs" id="importExportButton" className="App-control-toolbar fa" onClick={() => this._setActiveModal('ImportExportModal')}/>
-      <FaCog data-tip="Configure application settings" id="settingsToolbar" className="App-control-toolbar fa" onClick={() => this._setActiveModal('SettingsModal')} />
-      <FaTable data-active={this.state.tableViewerComponents.tableViewerCompActive} data-tip="View a tabular representation of the active graph" id="tableViewButton" className="App-control-toolbar fa" onClick={() => {
-        this.state.tableViewerComponents.tableViewerCompActive ? this._closeTableViewer() : this._openTableViewer("tableViewerCompActive");
-      }}/>
-      {
-      // Perfectly functional but does not provide enough functionality as of now to warrant its presence
-      /*<FaBarChart data-tip="Type Bar Chart - see all the types contained within the graph distributed in a bar chart"
-                  className="App-control-toolbar fa"
-                  onClick={() => this.setState ({ showTypeChart : true })} />*/
-      // The tool works as intended but the annotator does not yet.
-      /*<FaPen className="App-control-toolbar fa" data-tip="Annotate Graph" onClick={() => this._annotateGraph ()}/>*/
-      }
-      </>
-    );
+  _handleShowAnswerViewer () {
+    if (this.state.message && this.state.message.message) {
+      this._setActiveModal("AnswerViewerModal");
+    }
   }
-  /**
-   * Render the toolbar tools
-   *
-   * @private
-   */
-  _getTools() {
-    return (
-      <>
-      <Tool name="Navigate" shortcut="v" description="Click a node to move the camera to it and make it the center of rotation." callback={(bool) => this._setNavMode(bool)}>
-      <FaArrowsAlt/>
-      </Tool>
-      <Tool name="Select" shortcut="g" description="Open a node or link in the object viewer" ref={this._selectToolRef} callback={(bool) => this._setSelectMode(bool)}>
-        <FaMousePointer/>
-      </Tool>
-      <Tool name="Highlight Types"
-            shortcut="h"
-            description="Highlights all elements of the type that is being hovered over.<br/> Left click filters all of that type. Right click filters all not of that type."
-            callback={(bool) => this._setHighlightTypesMode(bool)}>
-        <FaHighlighter/>
-      </Tool>
-      <Tool name="Examine Connection"
-            shortcut="f"
-            description="Displays a connection between two nodes and all links between them"
-            callback={(bool) => this._setConnectionExaminerActive(bool)}>
-        <FaEye/>
-      </Tool>
-      <Tool name="Browse node"
-            shortcut="e"
-            description="Browse new nodes connected to a node in the graph by a biolink modal type"
-            callback={(bool) => {
-              this.setState({ browseNodeActive : bool });
-              if (!bool) {
-                this._browseNodeInterface.current.hide();
-              }
-            }}>
-        <IoMdBrowsers/>
-      </Tool>
-      </>
-    );
-  }
+  /*
   _handleShowAnswerViewer () {
     console.log (this._answerViewer);
     if (this.state.message) {
@@ -2384,6 +1966,7 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
       });
     }
   }
+  */
   /**
    * Handles error messages
    *
@@ -2394,6 +1977,7 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
    * @private
    */
   _handleMessageDialog (title, message, details) {
+    if (!this._messageDialog.current) return;
     if (!Array.isArray(message)) {
       message = [{
         message: message,
@@ -2417,6 +2001,9 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
    * @private
    */
   _handleUpdateSettings (e) {
+    // We don't want settings to be modified when the app is embedded.
+    if (this.embedded) return;
+
     var targetName = e.currentTarget.name;
     console.log ("--update settings: " + targetName);
     if (targetName === 'dynamicIdResolution') {
@@ -2427,7 +2014,7 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
       forceGraphOpts.enableNodeDrag = e.currentTarget.checked;
       this.setState({ forceGraphOpts });
       localStorage.setItem('forceGraphOpts', JSON.stringify (forceGraphOpts));
-      this.fg.refresh();
+      if (this.fg.refresh) this.fg.refresh();
     } else if (targetName === 'useToolCursor') {
       this.setState ({ useToolCursor : e.currentTarget.checked });
       localStorage.setItem (targetName, JSON.stringify (e.currentTarget.checked));
@@ -2467,20 +2054,6 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
     const msg = schemaActive ? this.state.schemaMessage : this.state.message;
 
     this._translateGraph(msg,false,schemaActive);
-  }
-  _renderCheckboxes(stateKey) {
-    return this.state[stateKey].map((checkbox, index) =>
-            <div key={index}>
-                <label>
-                    <input
-                        type="checkbox"
-                        checked={checkbox.checked}
-                        onChange={()=>this._toggleCheckbox(stateKey, index)}
-                    />
-                    {checkbox.label}
-                </label>
-            </div>
-        );
   }
   /**
    *
@@ -2624,9 +2197,9 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
       );
   }
   _closeObjectViewer() {
-    if (this.state.objectViewerEnabled) {
+    if (this.state.objectViewerEnabled && this._graphSplitPane.current) {
       let width = this._graphSplitPane.current.splitPane.offsetWidth;
-        this._graphSplitPane.current.setState({ draggedSize : width, pane1Size : width , position : width });
+      this._graphSplitPane.current.setState({ draggedSize : width, pane1Size : width , position : width });
       this._updateGraphSize(width);
       this.setState({ objectViewerSelection : null });
     }
@@ -2698,6 +2271,7 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
    * @private
    */
   _updateDimensions() {
+    if (!this._graphSplitPane.current) return;
     let prevWinWidth = this._graphSplitPane.current.state.prevWinWidth;
     let prevWinHeight = this._tableSplitPane.current.state.prevWinHeight;
     if (prevWinWidth === undefined) prevWinWidth = window.innerWidth;
@@ -2835,175 +2409,6 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
     );
   }
   /**
-   * Render the modal settings dialog.
-   *
-   * @private
-   */
-  _renderSettingsModal () {
-    return (
-      <>
-        <Modal show={this.state.activeModal==="SettingsModal"}
-               onHide={() => this._setActiveModal(null)}>
-          <Modal.Header closeButton>
-            <Modal.Title>Settings</Modal.Title>
-          </Modal.Header>
-          <Modal.Body>
-            <Tabs defaultActiveKey="general" className="react-tabs-settings-tab-list">
-              <Tab eventKey="general" title="General">
-            <hr style={{visibility:"hidden",marginTop:0}}/>
-            <div style={{display:"flex",flexDirection:"column"}}>
-              <b>Visualization Mode and Graph Colorization</b>
-              <div style={{display:"flex"}}>
-                <div>
-                  <input type="radio" name="visMode"
-                         value="3D"
-                         checked={this.state.visMode === "3D"}
-                         onChange={this._handleUpdateSettings} />3D &nbsp;
-                </div>
-                <div>
-                  <input type="radio" name="visMode"
-                         value="2D"
-                         checked={this.state.visMode === "2D"}
-                         onChange={this._handleUpdateSettings} />2D &nbsp;
-                </div>
-                <div>
-                  <input type="radio" name="visMode"
-                         value="VR"
-                         checked={this.state.visMode === "VR"}
-                         onChange={this._handleUpdateSettings} />VR &nbsp;&nbsp;
-                </div>
-              <div>
-                <input type="checkbox" name="colorGraph"
-                       checked={this.state.colorGraph}
-                       onChange={this._handleUpdateSettings} /> Color the graph.
-              </div>
-              </div>
-            </div>
-
-            <hr/>
-
-            <div style={{display:"flex"}}>
-              <div style={{display:"flex",flexDirection:"column",flexGrow:1}}>
-                <b>Use Cache</b>
-                <div>
-                  <input type="checkbox" name="useCache"
-                         checked={this.state.useCache}
-                         onChange={this._handleUpdateSettings} /> Use cached responses.
-                </div>
-              </div>
-              <div style={{display:"flex",justifyContent:"center",alignItems:"center"}}>
-                <Button id="clearCache"
-                        outline className="App-control"
-                        color="primary" onClick={this._clearCache}>
-                  Clear the cache {this.state.databaseSize}
-                </Button>
-              </div>
-            </div>
-
-            {
-            /* Really *bad* feature...
-            <hr/>
-
-            <div style={{display:"flex",flexDirection:"column"}}>
-              <b>Cursor</b>
-              <div>
-                <input type="checkbox" name="useToolCursor"
-                       checked={this.state.useToolCursor}
-                       onChange={this._handleUpdateSettings} /> Use active tool as cursor.
-              </div>
-            </div>
-            */
-            }
-
-            <hr/>
-
-            <div style={{display:"flex",flexDirection:"column"}}>
-              <b>Node Drag</b>
-              <div>
-                <input type="checkbox" name="enableNodeDrag"
-                       checked={this.state.forceGraphOpts.enableNodeDrag}
-                       onChange={this._handleUpdateSettings} /> Allow node dragging in the force graph (requires refresh).
-              </div>
-            </div>
-
-            <hr/>
-
-            <div style={{display:"flex",flexDirection:"column"}}>
-              <b>Dynamic ID Resolution</b>
-              <div>
-                <input type="checkbox" name="dynamicIdResolution"
-                       checked={this.state.dynamicIdResolution}
-                       onChange={this._handleUpdateSettings} /> Enables dynamic id lookup of curies.
-              </div>
-            </div>
-              </Tab>
-              <Tab eventKey="graphStructure" title="Graph Structure">
-            <hr style={{visibility:"hidden",marginTop:0}}/>
-            <b>Link Weight Range</b> Min: [{this.state.linkWeightRange[0] / 100}] Max: [{this.state.linkWeightRange[1] / 100}]<br/>
-            Include only links with a weight in this range.
-            <Range allowCross={false} defaultValue={this.state.linkWeightRange} onChange={this._onLinkWeightRangeChange} />
-
-            <b>Node Connectivity Range</b> Min: [{this.state.nodeDegreeRange[0]}] Max: [{this.state.nodeDegreeRange[1]}] (reset on load)<br/>
-            Include only nodes with a number of connections in this range.
-            <Range allowCross={false}
-                   defaultValue={this.state.nodeDegreeRange}
-                   onChange={this._onNodeDegreeRangeChange}
-                   max={this.state.nodeDegreeMax}/>
-            <hr/>
-            <b>Force Graph Charge</b><br/>
-            Set the charge force on the active graph<br/>
-            <Form>
-              <Form.Control
-              type="number"
-              defaultValue={this.state.charge}
-              onChange={this._onChargeChange}
-              onKeyDown={(e) => {if (e.keyCode === 13) e.preventDefault();}}
-              />
-            </Form>
-            <hr/>
-
-            <b>Legend Display Limit ({this.state.schemaViewerActive && this.state.schemaViewerEnabled ? "schema" : "graph"})</b><br/>
-            <Form>
-              <Form.Label>Set the number of nodes that the legend displays:</Form.Label>
-              <Form.Control
-              type="number"
-              defaultValue={this.state.schemaViewerActive && this.state.schemaViewerEnabled ? this.state.schemaLegendRenderAmount.nodes : this.state.queryLegendRenderAmount.nodes}
-              onChange={(e) => (this._onLegendDisplayLimitChange('nodes',e))}
-              onKeyDown={(e) => {if (e.keyCode === 13) e.preventDefault();}}
-              />
-              <Form.Label>Set the number of links that the legend displays:</Form.Label>
-              <Form.Control
-              type="number"
-              defaultValue={this.state.schemaViewerActive && this.state.schemaViewerEnabled ? this.state.schemaLegendRenderAmount.links : this.state.queryLegendRenderAmount.links}
-              onChange={(e) => (this._onLegendDisplayLimitChange('links',e))}
-              onKeyDown={(e) => {if (e.keyCode === 13) e.preventDefault();}}
-              />
-            </Form>
-
-
-            {/*<div className={"divider"}/>*/}
-            <br/>
-              </Tab>
-              <Tab eventKey="knowledgeSources" title="Knowledge Sources">
-            <hr style={{visibility:"hidden",marginTop:0}}/>
-            <b>Database Sources</b><span> Filter graph edges by source database. Deselecting a database deletes all associations from that source.</span>
-            <div className="checkbox-container">{this._renderCheckboxes('dataSources')}</div>
-            <hr/>
-            <b>Reasoner Sources</b><span> Filter graph elements by source reasoner. Deselecting a reasoner deletes all associations from that source.</span>
-            <div className="checkbox-container">{this._renderCheckboxes('reasonerSources')}</div>
-              </Tab>
-            </Tabs>
-          </Modal.Body>
-          <Modal.Footer>
-            <Button variant="secondary" onClick={() => this._setActiveModal(null)}>
-              Close
-            </Button>
-          </Modal.Footer>
-        </Modal>
-      </>
-    );
-  }
-  /**
    * Sets the active modal
    *
    * @param {string|null} modalName - Sets activeModal to modalName, if null no modal is active.
@@ -3019,13 +2424,71 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
     // `ignoreQueryPrefix` automatically truncates the leading question mark within a query string in order to prevent it from being interpreted as part of it
     const params = qs.parse(window.location.search, { ignoreQueryPrefix : true });
 
+    /**
+     * Parse params into vars:
+     * - q|query
+     * - embedded: full | (graph|simple|true|"") | (false|<any>)
+     * - answer_viewer: (true|"") | (false|<any>) <- DISABLED
+     * - use_last_view: (true|"") | (false|<any>)
+     */
     const tranqlQuery = params.q || params.query;
+    const {
+      embed: embedded,
+      use_last_view: useLastUsedView
+      // answer_viewer: showAnswerViewer
+    } = params;
+
     if (tranqlQuery !== undefined) {
-      this._updateCode(tranqlQuery);
-      this.setState({}, () => {
-        this._executeQuery();
+      this._queryExecOnLoad = tranqlQuery;
+    }
+    // i.e. "?embed=true" or "?embed"
+    if (embedded !== undefined && embedded !== null) {
+      // Note that `this.embedded` is a derived property of embedMode (without a setter) so there is no need to set it here.
+      switch (embedded.toLowerCase()) {
+        case "full":
+          this.embedMode = EmbedMode.FULL;
+          break;
+        case "graph":
+        case "simple":
+        case "true":
+        case "":
+          this.embedMode = EmbedMode.SIMPLE;
+          break;
+        case "false":
+          break;
+        default:
+          console.error("Unknown embed type:", embedded);
+          this.embedMode = EmbedMode.SIMPLE;
+          break;
+      }
+      // Disable the cache when embedded
+      this.setState({
+        useCache : false
+      });
+      // Maintain localStorage under window.embeddedLocalStorage such that
+      // the App can only use localStorage while embedded when explcitly intended.
+      window.embeddedLocalStorage = window.localStorage;
+      const _localStorage = window.localStorage;
+      // localStorage is a property of window with a getter but no setter, so it has to be fully deleted before setting it to a new value.
+      delete window.localStorage;
+      // Create a skeleton version of localStorage, in which persistent methods are overwritten while preserving the full API.
+      const skeletonStorage = Object.assign({
+        setItem: () => {},
+        removeItem: () => {},
+        key: () => {},
+        getItem: () => {},
+        removeItem: () => {},
+        length: 0
+      }, _localStorage);
+      // Create the new localStorage property with the skeleton storage.
+      Object.defineProperty(window, "localStorage", {
+        get: () => skeletonStorage
       });
     }
+    // Note: this option is only intended for use within an embedded page, since it doesn't make much sense in a normal context.
+    // Note2: *DISABLED*
+    // this.setState({ showAnswerViewerOnLoad: showAnswerViewer === "true" || showAnswerViewer === "" });
+    this.setState({ useLastUsedView: useLastUsedView === "true" || useLastUsedView === "" });
   }
   /**
    * Perform any necessary cleanup before being unmounted
@@ -3048,12 +2511,18 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
     this._updateDimensionsFunc = this._updateDimensions;
     window.addEventListener('resize', this._updateDimensionsFunc);
 
-    // Hydrate persistent state from local storage
-    this._hydrateState ();
-
     // Handle query string parameters (mini-router implementation)
     // & hydrate state accordingly
     this._handleQueryString ();
+    // Hydrate persistent state from local storage
+    if (!this.embedded) {
+      this._hydrateState ();
+      // This is a class field, not a state variable, so it needs to be manually loaded. It also has to update codemirror state,
+      // which is another reason it needs to be manualy handled.
+      this._updateResolvedIdentifiers(JSON.parse(localStorage.getItem('autocompleteIdentifiers')) || {}, -1);
+      // Make sure that the code loaded from localStorage goes through `_updateCode`
+      this.setState({}, () => this._updateCode(this.state.code));
+    }
 
     // Populate the cache viewer
     this._updateCacheViewer ();
@@ -3066,6 +2535,14 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
     this._getSchema ();
 
     this._updateGraphSize(document.body.offsetWidth);
+
+    if (this._queryExecOnLoad !== undefined) {
+      // After initial loading is complete, execute the query specified in the URL's query string if there is one.
+      this._updateCode(this._queryExecOnLoad);
+      this.setState({}, () => {
+        this._executeQuery();
+      });
+    }
 
     this.setState({}, () => {
       if (this.fg) {
@@ -3087,17 +2564,38 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
   }
 
   render() {
-    // Render it.
+    // Render just the graph if the app is being embedded
+    if (this.embedded) return <TranQLEmbedded embedMode={this.embedMode}
+                                              useLastUsedView={this.state.useLastUsedView}
+                                              graphLoading={this.state.loading}
+                                              graph={this.state.graph}
+                                              renderForceGraph={this._renderForceGraph}
+                                              renderCodemirror={this._renderCodemirror}
+                                              renderAnswerViewer={this._renderAnswerViewer}
+                                              graphRefCallback={(el) => {this.fg = el; this._updateFg ()}}/>;
+    // Render the app
     return (
       <div className="App" id="AppElement">
-        {this._renderSettingsModal () }
+        <SettingsModal active={this.state.activeModal==="SettingsModal"}
+                       onHide={() => this._setActiveModal(null)}
+                       appState={this.state}
+
+                       toggleCheckbox={this._toggleCheckbox}
+
+                       handleUpdateSettings={this._handleUpdateSettings}
+                       clearCache={this._clearCache}
+                       onLinkWeightRangeChange={this._onLinkWeightRangeChange}
+                       onNodeDegreeRangeChange={this._onNodeDegreeRangeChange}
+                       onChargeChange={this._onChargeChange}
+                       onLegendNodeLimitChange={(e) => (this._onLegendDisplayLimitChange('nodes',e))}
+                       onLegendLinkLimitChange={(e) => (this._onLegendDisplayLimitChange('links',e))}/>
         {this._renderTypeChart ()}
         <HelpModal activeModal={this.state.activeModal} setActiveModal={this._setActiveModal}/>
-        <ToolbarHelpModal activeModal={this.state.activeModal}
+        {this._toolbar.current && <ToolbarHelpModal activeModal={this.state.activeModal}
                           setActiveModal={this._setActiveModal}
-                          buttons={this._getButtons()}
-                          tools={this._getTools()}
-                          />
+                          buttons={this._toolbar.current._getButtons()}
+                          tools={this._toolbar.current._getTools()}
+                          />}
         <ImportExportModal activeModal={this.state.activeModal}
                            setActiveModal={this._setActiveModal}
                            record={this.state.record}
@@ -3164,49 +2662,11 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
                       title={"Cached queries"+(!this.state.useCache?' (cache disabled)':'')}
                       tools={this.state.cachedQueriesModalTools}
                       emptyText=<div style={{fontSize:"17px"}}>You currently have no cached queries.</div>/>
-        <AnswerViewer show={true} ref={this._answerViewer} />
+        {/* <AnswerViewer show={true} ref={this._answerViewer} /> */}
+        {this._renderAnswerViewer()}
         <ReactTooltip place="left"/>
-        <header className="App-header" >
-          <div id="headerContainer" className="no-select">
-            <p style={{display:"inline-block",flex:1}}>TranQL</p>
-            <Message activeModal={this.state.activeModal} ref={this._messageDialog} />
-            <GridLoader
-              css={spinnerStyleOverride}
-              id={"spinner"}
-              sizeUnit={"px"}
-              size={6}
-              color={'#2cbc12'}
-              loading={this.state.loading && (this.state.schemaViewerActive || !this.state.schemaViewerEnabled)} />
-            {
-              !this.state.toolbarEnabled &&
-                <Button id="navModeButton"
-                        outline
-                        color="primary" onClick={() => {this._setNavMode(!this.state.navigateMode); this._setSelectMode(!this.state.selectMode)}}>
-                  { this.state.navigateMode && (this.state.visMode === '3D' || this.state.visMode === '2D') ? "Navigate" : "Select" }
-                </Button>
-            }
-            {
-              !this.state.loading ? (
-                <Button id="runButton"
-                        outline
-                        color="success" onClick={this._executeQuery}>
-                  Run
-                </Button>
-              ) : (
-                <Button id="abortButton"
-                        outline
-                        color="danger" onClick={this._abortQuery}>
-                  Cancel
-                </Button>
-              )
-            }
-            <div id="appControlContainer" style={{display:(this.state.toolbarEnabled ? "none" : "")}}>
-              <FaCog data-tip="Configure application settings" id="settings" className="App-control" onClick={() => this._setActiveModal("SettingsModal")} />
-              <FaPlayCircle data-tip="Answer Navigator - see each answer, its graph structure, links, knowledge source and literature provenance" id="answerViewer" className="App-control" onClick={this._handleShowAnswerViewer} />
-            </div>
-          </div>
-        </header>
-        <div>
+        {this._renderBanner()}
+        <div className="App-body">
           {
             this.state.showCodeMirror ?
               (
@@ -3219,17 +2679,7 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
                                  setActiveModal={this._setActiveModal}
                                  cache={this._cache}
                                  setCode={this._updateCode}/>*/}
-                  <CodeMirror editorDidMount={(editor)=>{this._codemirror = editor;}}
-                  className="query-code"
-                  value={this.state.code}
-                  onBeforeChange={(editor, data, code) => this._updateCode(code)}
-                  onChange={(editor) => {
-                    if (editor.state.completionActive) {
-                      this._codeAutoComplete();
-                    }
-                  }}
-                  options={this.state.codeMirrorOptions}
-                  autoFocus={true} />
+                  {this._renderCodemirror()}
                 </>
               ) :
               (
@@ -3304,13 +2754,29 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
                     <div id="bottomContainer">
                       {
                         this.state.toolbarEnabled && (
-                          <Toolbar id="toolbar"
-                                   default={0}
-                                   overrideCursor={this.state.useToolCursor}
-                                   tools={this._getTools()}
-                                   buttons={this._getButtons()}
-                                   onlyUseShortcutsWhen={[HTMLBodyElement]}
-                                   ref={this._toolbar}/>
+                          <AppToolbar appState={this.state}
+                                      ref={this._toolbar}
+                                      // Button callbacks
+                                      answerViewerCallback={this._handleShowAnswerViewer}
+                                      findToolCallback={() => this._findTool.current.toggleShow()}
+                                      helpToolCallback={() => this._setActiveModal('HelpModal')}
+                                      cachedQueriesToolCallback={() => this._setActiveModal('CachedQueriesModal')}
+                                      importExportToolCallback={() => this._setActiveModal('ImportExportModal')}
+                                      settingsToolCallback={() => this._setActiveModal('SettingsModal')}
+                                      tableViewerToolCallback={() => {
+                                        this.state.tableViewerComponents.tableViewerCompActive ? this._closeTableViewer() : this._openTableViewer("tableViewerCompActive");
+                                      }}
+                                      // Tool callbacks
+                                      navigateToolCallback={this._setNavMode}
+                                      selectToolCallback={this._setSelectMode}
+                                      highlightTypesToolCallback={this._setHighlightTypesMode}
+                                      examineConnectionToolCallback={this._setConnectionExaminerActive}
+                                      browseNodeToolCallback={(bool) => {
+                                        this.setState({ browseNodeActive : bool });
+                                        if (!bool) {
+                                          this._browseNodeInterface.current.hide();
+                                        }
+                                      }}/>
                         )
                       }
                       <div id="graphOverlayContainer">
@@ -3364,32 +2830,6 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
                                    resultMouseLeave={(result) => {
                                      this._highlightType(result.id, false, false, undefined, "id")
                                    }}/>
-                        {/*<FindTool graph={this.state.schemaViewerActive && this.state.schemaViewerEnabled ? this.state.schema : this.state.graph}
-                                  resultMouseClick={(values)=>{
-                                    const isNode = function(element) {
-                                      return !element.origin.hasOwnProperty('source_id') && !element.origin.hasOwnProperty('target_id');
-                                    }
-                                    if (values.length > 1) {
-                                      // Grouped syntax which isn't really compatible - just use the link.
-                                      values = values.filter((element) => !isNode(element));
-                                    }
-                                    values.forEach((element) => {
-                                      if (isNode(element)) {
-                                        this._handleNodeClick(element);
-                                      }
-                                      else {
-                                        this._handleLinkClick(element, true);
-                                      }
-                                    });
-                                  }}
-                                  resultMouseEnter={(values)=>{
-                                    values.forEach((element) => this._highlightType(element.id,0xff0000,false,undefined,'id'))}
-                                  }
-                                  resultMouseLeave={(values)=>{
-                                    values.forEach((element) => this._highlightType(element.id,false,false,undefined,'id'))}
-                                  }
-                                  ref={this._findTool}/>*/}
-
                       </div>
                     </div>
                     {/*<div onContextMenu={this._handleContextMenu} id="graphContainer" data-vis-mode={this.state.visMode}>*/}
@@ -3435,57 +2875,18 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
               }
             </div>
             <div className="h-100">
-            <TableViewer tableView={this.state.tableViewerComponents.tableViewerCompActive}
-                         close={this._closeTableViewer}
-                         ref={this._tableViewer}
-                         data={(() => {
-                           const graph = this.state.schemaViewerActive && this.state.schemaViewerEnabled ? this.state.schema : this.state.graph;
-                           // Table viewer generates a tab for every property in the object provided, but we only want nodes and links as our tabs.
-                           return {
-                             nodes : graph.nodes.map((node) => node.origin),
-                             links : graph.links.map((link) => link.origin)
-                           };
-                         })()}
-                         defaultTableAttributes={{
-                           "nodes" : [
-                             "name",
-                             "id",
-                             "type"
-                           ],
-                           "links" : [
-                             "source_id",
-                             "target_id",
-                             "type",
-                             "source_database"
-                           ]
-                         }}
-                         tableProps={{
-                           getTdProps: (tableState, rowInfo, columnInfo, tableInstance) => {
-                             const get_element = () => {
-                               const is_node = this._tableViewer.current._tabs.current.props.activeKey === "0";
-                               const graph = this.state.schemaViewerActive && this.state.schemaViewerEnabled ? this.state.schema : this.state.graph;
-                               const elements = is_node ? graph.nodes : graph.links;
-                               const origin = rowInfo.original;
-
-                               const element = elements.filter((element) => element.origin.id === origin.id)[0];
-
-                               const click_method = (is_node ? () => {
-                                 this._handleNodeClick(element);
-                               } : () => {
-                                 this._handleLinkClick(element, true);
-                               });
-
-                               return {
-                                 click : click_method
-                               };
-                             }
-                             return {
-                               onClick: () => {
-                                 get_element().click();
-                               }
-                             };
-                           }
-                         }}/>
+            <AppTableViewer tableViewerComponents={this.state.tableViewerComponents}
+                            closeTableViewer={this._closeTableViewer}
+                            innerRef={this._tableViewer}
+                            appState={{
+                              schemaViewerActive: this.state.schemaViewerActive,
+                              schemaViewerEnabled: this.state.schemaViewerEnabled,
+                              schema: this.state.schema,
+                              graph: this.state.graph
+                            }}
+                            tableViewer={this._tableViewer}
+                            handleNodeClick={this._handleNodeClick}
+                            handleLinkClick={this._handleLinkClick}/>
             </div>
           </SplitPane>
         </div>
@@ -3493,6 +2894,16 @@ SELECT population_of_individual_organisms->chemical_substance->gene->biological_
       </div>
     );
   }
+}
+
+if(process.env.NODE_ENV === 'production') {
+  // behind proxy this would treat the path used to load index.html as root
+  // Slice the query string off of the URL.
+  const fullURL = window.location.origin + window.location.pathname;
+  // Slice the hanging "/" off of the end of the URL if it is present.
+  App.prototype.tranqlURL = fullURL.endsWith("/") ? fullURL.slice(0, -1) : fullURL;
+} else {
+  App.prototype.tranqlURL = "http://localhost:8001";
 }
 
 export default App;

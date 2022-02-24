@@ -6,8 +6,8 @@ from tranql.config import config
 
 
 class RtxSchema(StandardAPIResource):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.base_url = config.get("RTX_URL")
         self.predicates_url = self.base_url + '/beta/api/rtx/v1/predicates'
 

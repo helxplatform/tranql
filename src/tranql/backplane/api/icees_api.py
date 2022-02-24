@@ -29,7 +29,8 @@ class ICEESClusterArgs:
 
 
 class ICEESSchema(StandardAPIResource):
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.version_to_url_map = {
             "icees": config.get("ICEES_URL").rstrip('/') + "/knowledge_graph/schema",
             "icees3_and_epr": config.get("ICEES3_AND_EPR_URL").rstrip('/') + "/knowledge_graph/schema"
@@ -106,7 +107,8 @@ class ICEESSchema(StandardAPIResource):
 
 class ICEESClusterQuery(StandardAPIResource):
     """ ICEES Resource. """
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.version_to_url_map = {
             "icees": config.get("ICEES3_AND_EPR_URL").rstrip('/') + "/knowledge_graph",
             "icees3_and_epr": config.get("ICEES3_AND_EPR_URL").rstrip('/') + "/knowledge_graph"

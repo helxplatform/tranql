@@ -13,8 +13,8 @@ from tranql.config import config
 
 
 class RogerResource(StandardAPIResource):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
         self.url = config.get('ROGER_URL')
 
@@ -26,8 +26,8 @@ class RogerResource(StandardAPIResource):
 
 
 class RogerSchema(RogerResource):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
     def get(self):
         """
