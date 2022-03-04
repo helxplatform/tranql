@@ -13,8 +13,8 @@ from tranql.config import config
 
 
 class AutomatResource(StandardAPIResource):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.url = config.get("AUTOMAT_URL")
 
     def get_kp_reasoner_api(self, kp_tag):
@@ -25,9 +25,6 @@ class AutomatResource(StandardAPIResource):
 
 
 class AutomatSchema(AutomatResource):
-    def __init__(self):
-        super().__init__()
-
     def get(self, kp_tag):
         """
         Automat Schema
@@ -79,9 +76,6 @@ class AutomatSchema(AutomatResource):
 
 class AutomatQuery(AutomatResource):
     """ Generic graph query to Gamma. """
-    def __init__(self):
-        super().__init__()
-
     def post(self, kp_tag):
         """
         Automat query
@@ -159,10 +153,6 @@ class AutomatQuery(AutomatResource):
 
 
 class AutomatRegistry(AutomatResource):
-
-    def __init__(self):
-        super().__init__()
-
     def get(self):
         """
                 Automat query

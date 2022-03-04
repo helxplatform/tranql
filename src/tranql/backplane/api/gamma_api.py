@@ -15,8 +15,8 @@ logger = logging.getLogger(__name__)
 
 
 class GammaResource(StandardAPIResource):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.robokop_url = config.get("GAMMA_URL")
         self.view_post_url = f'{self.robokop_url}/api/simple/view/'
         self.quick_url = f'{self.robokop_url}/api/simple/quick/?rebuild=false&output_format=MESSAGE&max_connectivity=0&max_results=300'
@@ -26,8 +26,8 @@ class GammaResource(StandardAPIResource):
 
 
 class GammaSchema(GammaResource):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
     def get(self):
         """Robokop schema
@@ -132,8 +132,8 @@ class GammaQuery(GammaResource):
 
 class PublishToGamma(GammaResource):
     """ Publish a graph to Gamma. """
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
     def post(self):
         """

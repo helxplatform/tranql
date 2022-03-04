@@ -1,0 +1,7 @@
+{
+  "dependencies": {
+    "@codemirror/tooltip": "^0.19.6",
+    "@uiw/react-codemirror": "^4.2.3",
+    "codemirror": "^5.63.3"
+  }
+}

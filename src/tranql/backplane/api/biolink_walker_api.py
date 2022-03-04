@@ -10,8 +10,8 @@ logger = logging.getLogger(__name__)
 
 class BiolinkModelWalkerService(StandardAPIResource):
     """ Biolink Model Walk Resource. """
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
     def post(self):
         """
