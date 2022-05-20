@@ -23,6 +23,7 @@ from tranql.tranql_ast import SelectStatement
 from tranql.tranql_schema import GraphTranslator, RedisAdapter
 from tranql.exception import TranQLException
 from tranql.config import Config as TranqlConfig
+from tranql.util import title_case
 
 logger = logging.getLogger(__name__)
 
@@ -668,10 +669,16 @@ class AutocompleteTerm(StandardAPIResource):
               query:
                 type: string
               allowed_concept_types:
-                description: List of allowed biolink types to search against, e.g. biolink:Disease
+                description: >
+                  List of allowed biolink types to search against, e.g. biolink:Disease.
+                  If null or empty, the search will execute against all supported types.
+                  Note that if searching against all types, a very high `query_limit` should be specified
+                  since it will be distributed evenly across every supported concept index in the redisgraph
+                  (and many will not yield and results while a few will yield many results).
                 type: array
                 items:
                   type: string
+                default: null
               fields:
                 description: List of fields to search against, i.e. `name`, `equivalent_identifiers`, etc. Currently unimplemented.
                 type: array
@@ -693,7 +700,7 @@ class AutocompleteTerm(StandardAPIResource):
     query = request.json["query"]
     # Indexes are equal to node labels in the redisgraph instance,
     # and each node label is simply a biolink concept type, e.g. biolink:Disease
-    indexes = request.json["allowed_concept_types"]
+    indexes = request.json.get("allowed_concept_types", None)
     fields = request.json.get("fields", [])
     prefix_search = request.json.get("prefix_search", True)
     query_limit = request.json.get("query_limit", 50)
@@ -704,6 +711,11 @@ class AutocompleteTerm(StandardAPIResource):
 
     redis_adapter = RedisAdapter()
     redis_schema_name = [schema_name for schema_name, metadata in schema.config['schema'].copy().items() if metadata.get('redis', False)][0]
+
+    if indexes is None or len(indexes) == 0:
+      concept_types = schema.schema[redis_schema_name]["schema"].keys()
+      indexes = ["biolink:" + title_case(concept_type) for concept_type in concept_types]
+
 
     return redis_adapter.search(
       redis_schema_name,
