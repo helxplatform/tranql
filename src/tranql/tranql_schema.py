@@ -187,6 +187,10 @@ class RedisAdapter:
         schema = gi.get_schema(force_update=True)
         return schema
 
+    def search(self, name, query, indexes, fields=None, **kwargs):
+        gi: GraphInterface = self._get_adapter(name)
+        return gi.search(query, indexes, fields, **kwargs)
+
 
 class SchemaFactory:
     """
