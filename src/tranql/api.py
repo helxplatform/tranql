@@ -682,6 +682,10 @@ class AutocompleteTerm(StandardAPIResource):
                 description: Perform a prefix search against the graph, i.e. a search as you type query.
                 type: boolean
                 default: true
+              query_limit:
+                description: Limit the number of results that the search can return.
+                type: number
+                default: 50
     responses:
       '200':
         description: Success
@@ -692,6 +696,7 @@ class AutocompleteTerm(StandardAPIResource):
     indexes = request.json["allowed_concept_types"]
     fields = request.json.get("fields", [])
     prefix_search = request.json.get("prefix_search", True)
+    query_limit = request.json.get("query_limit", 50)
 
     tranql = TranQL (options={"registry": app.config.get('registry', False)})
     schema_factory = tranql.schema_factory
@@ -706,7 +711,8 @@ class AutocompleteTerm(StandardAPIResource):
       indexes,
       fields=fields,
       options={
-        "prefix_search": prefix_search
+        "prefix_search": prefix_search,
+        "query_limit": query_limit
       }
     )
 
