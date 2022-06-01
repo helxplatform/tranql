@@ -707,8 +707,12 @@ class AutocompleteTerm(StandardAPIResource):
     indexes = request.json.get("allowed_concept_types", None)
     fields = request.json.get("fields", [])
     prefix_search = request.json.get("prefix_search", True)
-    levenshtein_distance = request.json.get("levenshtein_distance", True)
+    levenshtein_distance = request.json.get("levenshtein_distance", 0)
     query_limit = request.json.get("query_limit", 50)
+
+    if prefix_search and levenshtein_distance > 0:
+      return "`prefix_search` and `levenshtein_distance` cannot be used together.", 400
+
 
     tranql = TranQL (options={"registry": app.config.get('registry', False)})
     schema_factory = tranql.schema_factory
