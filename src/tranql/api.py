@@ -686,9 +686,13 @@ class AutocompleteTerm(StandardAPIResource):
                   type: string
                 default: []
               prefix_search:
-                description: Perform a prefix search against the graph, i.e. a search as you type query.
+                description: Perform a prefix search against the graph, i.e. a search as you type query. Only one of `prefix_search` or `levenshtein_distance` can be used in a query.
                 type: boolean
                 default: true
+              levenshtein_distance:
+                description: Perform a fuzzy search using levenshtein distance. Only one of `prefix_search` or `levenshtein_distance` can be used in a query.
+                type: integer
+                default: 0
               query_limit:
                 description: Limit the number of results that the search can return.
                 type: number
@@ -703,6 +707,7 @@ class AutocompleteTerm(StandardAPIResource):
     indexes = request.json.get("allowed_concept_types", None)
     fields = request.json.get("fields", [])
     prefix_search = request.json.get("prefix_search", True)
+    levenshtein_distance = request.json.get("levenshtein_distance", True)
     query_limit = request.json.get("query_limit", 50)
 
     tranql = TranQL (options={"registry": app.config.get('registry', False)})
@@ -724,6 +729,9 @@ class AutocompleteTerm(StandardAPIResource):
       fields=fields,
       options={
         "prefix_search": prefix_search,
+        # Ensure results are linked to studies
+        "postprocessing_cypher": "MATCH (node)-[:`biolink:Association`|`biolink:association`]->()",
+        "levenshtein_distance": levenshtein_distance,
         "query_limit": query_limit
       }
     )
