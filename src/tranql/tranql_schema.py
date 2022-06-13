@@ -4,13 +4,14 @@ import yaml
 import copy
 import requests
 import os
-from tranql.concept import BiolinkModelWalker
-from tranql.exception import TranQLException, InvalidTransitionException
 import time
 import threading
-from PLATER.services.util.graph_adapter import GraphInterface
-from tranql.util import snake_case, title_case
 import logging
+from tranql.concept import BiolinkModelWalker
+from tranql.exception import TranQLException, InvalidTransitionException
+from tranql.util import snake_case, title_case
+from PLATER.services.util.graph_adapter import GraphInterface
+from Levenshtein import distance as LD
 
 logger = logging.getLogger(__name__)
 
@@ -187,9 +188,43 @@ class RedisAdapter:
         schema = gi.get_schema(force_update=True)
         return schema
 
-    def search(self, name, query, indexes, fields=None, **kwargs):
+    def search(self, name, query, indexes, fields=None, options={
+        "prefix_search": False,
+        "postprocessing_cypher": "",
+        "levenshtein_distance": 0,
+        "query_limit": 50,
+    }):
+        valid_fields = ["name", "synoynms"]
+        # valid_fields = ["name"]
+        prefix_search = options.get("prefix_search", False)
+        levenshtein_distance = options.get("levenshtein_distance", 0)
+        if levenshtein_distance > 0:
+            options["prefix_search"] = False
+
         gi: GraphInterface = self._get_adapter(name)
-        return gi.search(query, indexes, fields, **kwargs)
+        results = gi.search(query, indexes, fields, options)
+        if prefix_search and levenshtein_distance > 0:
+            search_terms = results["search_terms"]
+            search_fields = valid_fields if fields is None else fields
+            filtered_hits = []
+            print("Searching with terms", search_terms, "and fields", search_fields)
+            for hit in results["hits"]:
+                b_field_terms = [hit["node"][field].split(" ") for field in search_fields if field in hit["node"]]
+                matched = False
+                for field_terms in b_field_terms:
+                    if all([
+                        any([
+                            LD(search_term, b_term[0:len(search_term)]) <= levenshtein_distance
+                            for b_term in field_terms
+                        ])
+                        for search_term in search_terms
+                    ]):
+                        matched = True
+                        break
+                if matched: filtered_hits.append(hit)
+            print("Removed",[hit for hit in results["hits"] if hit not in filtered_hits])
+            results["hits"] = filtered_hits
+        return results["hits"]
 
 
 class SchemaFactory:

@@ -693,6 +693,10 @@ class AutocompleteTerm(StandardAPIResource):
                 description: Perform a fuzzy search using levenshtein distance. Only one of `prefix_search` or `levenshtein_distance` can be used in a query.
                 type: integer
                 default: 0
+              study_linked:
+                description: Only return results that are associated with studies.
+                type: bool
+                default: true
               query_limit:
                 description: Limit the number of results that the search can return.
                 type: number
@@ -705,13 +709,14 @@ class AutocompleteTerm(StandardAPIResource):
     # Indexes are equal to node labels in the redisgraph instance,
     # and each node label is simply a biolink concept type, e.g. biolink:Disease
     indexes = request.json.get("allowed_concept_types", None)
-    fields = request.json.get("fields", [])
+    fields = request.json.get("fields", None)
     prefix_search = request.json.get("prefix_search", True)
     levenshtein_distance = request.json.get("levenshtein_distance", 0)
+    study_linked = request.json.get("study_linked", True)
     query_limit = request.json.get("query_limit", 50)
 
-    if prefix_search and levenshtein_distance > 0:
-      return "`prefix_search` and `levenshtein_distance` cannot be used together.", 400
+    # if prefix_search and levenshtein_distance > 0:
+    #   return "`prefix_search` and `levenshtein_distance` cannot be used together.", 400
 
 
     tranql = TranQL (options={"registry": app.config.get('registry', False)})
@@ -734,7 +739,7 @@ class AutocompleteTerm(StandardAPIResource):
       options={
         "prefix_search": prefix_search,
         # Ensure results are linked to studies
-        "postprocessing_cypher": "MATCH (node)-[:`biolink:Association`|`biolink:association`]->()",
+        "postprocessing_cypher": "MATCH (node)-[:`biolink:Association`|`biolink:association`]->()" if study_linked else "",
         "levenshtein_distance": levenshtein_distance,
         "query_limit": query_limit
       }
