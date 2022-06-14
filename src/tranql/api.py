@@ -739,7 +739,7 @@ class AutocompleteTerm(StandardAPIResource):
       options={
         "prefix_search": prefix_search,
         # Ensure results are linked to studies
-        "postprocessing_cypher": "MATCH (node)-[:`biolink:Association`|`biolink:association`]->()" if study_linked else "",
+        "postprocessing_cypher": "MATCH ()-[:`biolink:Association`|`biolink:association`|`biolink:Mentions`|`biolink:mentions`]->(node)" if study_linked else "",
         "levenshtein_distance": levenshtein_distance,
         "query_limit": query_limit
       }

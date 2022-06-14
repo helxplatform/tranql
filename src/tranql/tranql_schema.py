@@ -11,7 +11,7 @@ from tranql.concept import BiolinkModelWalker
 from tranql.exception import TranQLException, InvalidTransitionException
 from tranql.util import snake_case, title_case
 from PLATER.services.util.graph_adapter import GraphInterface
-from Levenshtein import distance as LD
+# from Levenshtein import distance as LD
 
 logger = logging.getLogger(__name__)
 
@@ -195,6 +195,7 @@ class RedisAdapter:
         "query_limit": 50,
     }):
         valid_fields = ["name", "synoynms"]
+        prefix_length = 3
         # valid_fields = ["name"]
         prefix_search = options.get("prefix_search", False)
         levenshtein_distance = options.get("levenshtein_distance", 0)
@@ -214,7 +215,10 @@ class RedisAdapter:
                 for field_terms in b_field_terms:
                     if all([
                         any([
-                            LD(search_term, b_term[0:len(search_term)]) <= levenshtein_distance
+                            # This is similar to how elasticsearch performs a prefix search with fuzziness.
+                            # See "prefix length" in an elasticsearch fuzzy search.
+                            search_term[0:prefix_length] == b_term[0:prefix_length]
+                            # LD(search_term, b_term[0:len(search_term)]) <= levenshtein_distance
                             for b_term in field_terms
                         ])
                         for search_term in search_terms
