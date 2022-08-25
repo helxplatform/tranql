@@ -1,26 +1,6 @@
 pipeline {
     agent {
-        kubernetes {
-            cloud 'kubernetes'
-            yaml '''
-              apiVersion: v1
-              kind: Pod
-              spec:
-                containers:
-                - name: agent-docker
-                  image: helxplatform/agent-docker:latest
-                  command:
-                  - cat
-                  tty: true
-                  volumeMounts:
-                    - name: dockersock
-                      mountPath: "/var/run/docker.sock"
-                volumes:
-                - name: dockersock
-                  hostPath:
-                    path: /var/run/docker.sock
-            '''
-        }
+        label 'agent-docker'
     }
     stages {
         stage('Install') {
