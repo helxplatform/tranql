@@ -212,12 +212,15 @@ class RedisAdapter:
             for hit in results["hits"]:
                 b_field_terms = [hit["node"][field].split(" ") for field in search_fields if field in hit["node"]]
                 matched = False
+                print(search_terms, b_field_terms)
                 for field_terms in b_field_terms:
+                    # Every search term needs to be prefixed
                     if all([
+                        # The search term only needs to be prefixed by one term in the potential completion
                         any([
                             # This is similar to how elasticsearch performs a prefix search with fuzziness.
                             # See "prefix length" in an elasticsearch fuzzy search.
-                            search_term[0:prefix_length] == b_term[0:prefix_length]
+                            search_term[0:prefix_length].lower() == b_term[0:prefix_length].lower()
                             # LD(search_term, b_term[0:len(search_term)]) <= levenshtein_distance
                             for b_term in field_terms
                         ])
