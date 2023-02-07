@@ -19,7 +19,7 @@ pyyaml==5.1
 requests==2.25.1
 requests-cache==0.4.13
 requests-mock==1.5.2
-git+https://github.com/helxplatform/Plater.git@master
+git+https://github.com/helxplatform/Plater.git@v2.0.1
 bmt==0.8.2
 linkml==1.1.17
 linkml-dataops==0.1.0
