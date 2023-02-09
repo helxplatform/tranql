@@ -20,7 +20,7 @@ import {
 import 'react-confirm-alert/src/react-confirm-alert.css';
 import { ResponsiveContainer, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip } from 'recharts';
 import InlineEdit from 'react-edit-inline2';
-import DefaultTooltipContent from 'recharts/lib/component/DefaultTooltipContent';
+import { DefaultTooltipContent } from 'recharts/lib/component/DefaultTooltipContent';
 //import Tooltip from 'rc-tooltip';
 import ReactTooltip from 'react-tooltip';
 import { NotificationContainer , NotificationManager } from 'react-notifications';

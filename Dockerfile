@@ -1,6 +1,6 @@
 FROM python:3.7.3-alpine
 
-RUN apk add build-base git libxslt-dev linux-headers make nodejs npm zeromq zeromq-dev
+RUN apk add --update build-base git libxslt-dev linux-headers make nodejs-current nodejs-npm zeromq zeromq-dev
 
 ENV USER tranql
 ENV HOME /home/$USER
