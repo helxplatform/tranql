@@ -1,6 +1,6 @@
 FROM python:3.7.3-alpine
 
-RUN apk add build-base git libxslt-dev linux-headers make nodejs npm zeromq zeromq-dev
+RUN apk add --update build-base git libxslt-dev linux-headers make nodejs-current nodejs-npm zeromq zeromq-dev
 
 ENV USER tranql
 ENV HOME /home/$USER
@@ -18,7 +18,7 @@ COPY --chown=$USER . tranql/
 
 WORKDIR $HOME/tranql/src/tranql/web
 RUN npm install
-RUN npm run build
+RUN GENERATE_SOURCEMAP=false npm run build
 
 WORKDIR $HOME/tranql
 RUN pip install --user --upgrade pip

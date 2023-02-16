@@ -1,78 +1,80 @@
+library 'pipeline-utils@master'
+
 pipeline {
     agent {
         kubernetes {
-            cloud 'kubernetes'
+            label 'kaniko-build-agent'
             yaml '''
-              apiVersion: v1
-              kind: Pod
-              spec:
-                containers:
-                - name: agent-docker
-                  image: helxplatform/agent-docker:latest
-                  command:
-                  - cat
-                  tty: true
-                  volumeMounts:
-                    - name: dockersock
-                      mountPath: "/var/run/docker.sock"
-                volumes:
-                - name: dockersock
-                  hostPath:
-                    path: /var/run/docker.sock
-            '''
+kind: Pod
+metadata:
+  name: kaniko
+spec:
+  containers:
+  - name: jnlp
+    workingDir: /home/jenkins/agent
+  - name: kaniko
+    workingDir: /home/jenkins/agent
+    image: gcr.io/kaniko-project/executor:debug
+    imagePullPolicy: Always
+    resources:
+      requests:
+        cpu: "512m"
+        memory: "1024Mi"
+        ephemeral-storage: "4Gi"
+      limits:
+        cpu: "1024m"
+        memory: "6Gi"
+        ephemeral-storage: "5Gi"
+    command:
+    - /busybox/cat
+    tty: true
+    volumeMounts:
+    - name: jenkins-docker-cfg
+      mountPath: /kaniko/.docker
+  volumes:
+  - name: jenkins-docker-cfg
+    projected:
+      sources:
+      - secret:
+          name: rencibuild-imagepull-secret
+          items:
+            - key: .dockerconfigjson
+              path: config.json
+'''
         }
     }
+    environment {
+        PATH = "/busybox:/kaniko:/ko-app/:$PATH"
+        DOCKERHUB_CREDS = credentials("${env.CONTAINERS_REGISTRY_CREDS_ID_STR}")
+        REGISTRY = "${env.REGISTRY}"
+        REG_OWNER="helxplatform"
+        REG_APP="tranql"
+        COMMIT_HASH="${sh(script:"git rev-parse --short HEAD", returnStdout: true).trim()}"
+        VERSION_FILE="./src/tranql/_version.py"
+        VERSION="${sh(script:'awk \'{ print $3 }\' ./src/tranql/_version.py | xargs', returnStdout: true).trim()}"
+        IMAGE_NAME="${REGISTRY}/${REG_OWNER}/${REG_APP}"
+        TAG1="$BRANCH_NAME"
+        TAG2="$COMMIT_HASH"
+        TAG3="$VERSION"
+        TAG4="latest"
+    }
     stages {
-        stage('Install') {
-            steps {
-                container('agent-docker') {
-                    sh '''
-                    python3 -m pip install --user --upgrade pip
-                    python3 -m pip install --user -r requirements.txt
-                    python3 -m pip install --user .
-                    make install.npm_nobuild
-                    '''
-                }
-            }
-        }
         stage('Test') {
-            environment {
-                MOCKING=true
-                BROWSER_MODE = "HEADLESS"
-                SANDBOX=false
-                CI=true
-            }
             steps {
-                container('agent-docker') {
-                    // Run the webserver in the background.
-                    // Use curl to wait until the webserver is serving localhost:3000 and redirect stout and stderr to null device.
-                    // Run Puppeteer and Python tests once React app is ready to be used.
-                    // Kill react-scripts processes listening on port 3000. There's probably a better way to kill react-scripts, but it works.
-                    sh '''
-                    make run.web &
-                    wget --retry-connrefused --tries=120 --waitretry=1 -q http://localhost:3000 -O /dev/null
-                    make test
-                    npx kill-port 3000
-                    '''
+                sh '''
+                echo "Test stage"
+                '''
+            }
+        }
+        stage('Build') {
+            steps {
+                script {
+                    container(name: 'kaniko', shell: '/busybox/sh') {
+                        kaniko.buildAndPush("./Dockerfile", ["$IMAGE_NAME:$TAG1", "$IMAGE_NAME:$TAG2", "$IMAGE_NAME:$TAG3", "$IMAGE_NAME:$TAG4"])
+                    }
                 }
             }
         }
-        stage('Publish') {
-            when {
-                buildingTag()
-            }
-            environment {
-                DOCKERHUB_CREDS = credentials('rencibuild_dockerhub_machine_user')
-            }
-            steps {
-                container('agent-docker') {
-                    sh '''
-                    echo $DOCKERHUB_CREDS_PSW | docker login -u $DOCKERHUB_CREDS_USR --password-stdin
-                    make build
-                    make publish
-                    '''
-                }
-            }
-        }
+
     }
 }

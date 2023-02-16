@@ -20,9 +20,10 @@ from tranql.concept import ConceptModel
 from tranql.exception import TranQLException
 from tranql.main import TranQL, TranQLIncompleteParser
 from tranql.tranql_ast import SelectStatement
-from tranql.tranql_schema import GraphTranslator
+from tranql.tranql_schema import GraphTranslator, RedisAdapter
 from tranql.exception import TranQLException
 from tranql.config import Config as TranqlConfig
+from tranql.util import title_case
 
 logger = logging.getLogger(__name__)
 
@@ -464,7 +465,6 @@ class TranQLQuery(StandardAPIResource):
             result = self.handle_exception(errors)
         return self.response(result)
 
-
 class AnnotateGraph(StandardAPIResource):
     """ Request the message object to be annotated by the backplane and return the annotated message """
     def post(self):
@@ -650,6 +650,102 @@ class ReasonerURLs(StandardAPIResource):
         return {schema[0]: schema[1]['url'] for schema in schema.schema.items()}
 
 
+class AutocompleteTerm(StandardAPIResource):
+  """ Get autocomplete suggestions for a search term using the TranQL redisgraph instance """
+  def post(self):
+    """
+    Autocomplete Term
+    ---
+    tags: [util]
+    description: Get autocomplete suggestions for a search term using the TranQL redisgraph instance
+    requestBody:
+      description: Search term
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              query:
+                type: string
+              allowed_concept_types:
+                description: >
+                  List of allowed biolink types to search against, e.g. biolink:Disease.
+                  If null or empty, the search will execute against all supported types.
+                  Note that if searching against all types, a very high `query_limit` should be specified
+                  since it will be distributed evenly across every supported concept index in the redisgraph
+                  (and many will not yield and results while a few will yield many results).
+                type: array
+                items:
+                  type: string
+                default: null
+              fields:
+                description: List of fields to search against, i.e. `name`, `equivalent_identifiers`, etc. Currently unimplemented.
+                type: array
+                items:
+                  type: string
+                default: []
+              prefix_search:
+                description: Perform a prefix search against the graph, i.e. a search as you type query. Only one of `prefix_search` or `levenshtein_distance` can be used in a query.
+                type: boolean
+                default: true
+              levenshtein_distance:
+                description: Perform a fuzzy search using levenshtein distance. Only one of `prefix_search` or `levenshtein_distance` can be used in a query.
+                type: integer
+                default: 0
+              study_linked:
+                description: Only return results that are associated with studies.
+                type: bool
+                default: true
+              query_limit:
+                description: Limit the number of results that the search can return.
+                type: number
+                default: 50
+    responses:
+      '200':
+        description: Success
+    """
+    query = request.json["query"]
+    # Indexes are equal to node labels in the redisgraph instance,
+    # and each node label is simply a biolink concept type, e.g. biolink:Disease
+    indexes = request.json.get("allowed_concept_types", None)
+    fields = request.json.get("fields", None)
+    prefix_search = request.json.get("prefix_search", True)
+    levenshtein_distance = request.json.get("levenshtein_distance", 0)
+    study_linked = request.json.get("study_linked", True)
+    query_limit = request.json.get("query_limit", 50)
+
+    # if prefix_search and levenshtein_distance > 0:
+    #   return "`prefix_search` and `levenshtein_distance` cannot be used together.", 400
+
+
+    tranql = TranQL (options={"registry": app.config.get('registry', False)})
+    schema_factory = tranql.schema_factory
+    schema = schema_factory.get_instance(force_update=False)
+
+    redis_adapter = RedisAdapter()
+    redis_schema_name = [schema_name for schema_name, metadata in schema.config['schema'].copy().items() if metadata.get('redis', False)][0]
+
+    if indexes is None or len(indexes) == 0:
+      concept_types = schema.schema[redis_schema_name]["schema"].keys()
+      indexes = ["biolink:" + title_case(concept_type) for concept_type in concept_types]
+
+
+    return redis_adapter.search(
+      redis_schema_name,
+      query,
+      indexes,
+      fields=fields,
+      options={
+        "prefix_search": prefix_search,
+        # Ensure results are linked to studies
+        "postprocessing_cypher": "MATCH (:`biolink:StudyVariable`)-[]-(node)" if study_linked else "",
+        # "postprocessing_cypher": "MATCH ()-[:`biolink:Association`|`biolink:association`|`biolink:Mentions`|`biolink:mentions`]->(node)" if study_linked else "",
+        "levenshtein_distance": levenshtein_distance,
+        "query_limit": query_limit
+      }
+    )
+
 class ParseIncomplete(StandardAPIResource):
     """ Tokenizes an incomplete query and returns the result """
     def parse(self, parser, query):
@@ -754,6 +850,7 @@ api.add_resource(DecorateKG, f'{WEB_PREFIX}/tranql/decorate_kg')
 api.add_resource(ModelConceptsQuery, f'{WEB_PREFIX}/tranql/model/concepts')
 api.add_resource(ModelRelationsQuery, f'{WEB_PREFIX}/tranql/model/relations')
 api.add_resource(ParseIncomplete, f'{WEB_PREFIX}/tranql/parse_incomplete')
+api.add_resource(AutocompleteTerm, f'{WEB_PREFIX}/tranql/autocomplete_term')
 api.add_resource(ReasonerURLs, f'{WEB_PREFIX}/tranql/reasonerURLs')
 
 api.add_resource(WebAppPath, f'{WEB_PREFIX}/<path:path>', endpoint='webapp_path', defaults={'web_prefix': WEB_PREFIX})

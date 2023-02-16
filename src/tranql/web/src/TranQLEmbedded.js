@@ -26,11 +26,11 @@ const spinnerStyleOverride = css`
 export default function TranQLEmbedded({ embedMode, useLastUsedView, graphLoading, graph, renderForceGraph, renderCodemirror, renderAnswerViewer, graphRefCallback }) {
     const defaultShowAnswerViewer = window.embeddedLocalStorage.getItem("defaultUseAnswerViewer") === "true";
     // If using the last used view, load that view from localStorage. Else, show the force graph by default.
-    const [answerViewer, useAnswerViewer] = useState(useLastUsedView ? defaultShowAnswerViewer : false);
+    const [answerViewer, enableAnswerViewer] = useState(useLastUsedView ? defaultShowAnswerViewer : false);
 
     const toggleAnswerViewer = () => {
         const newValue = !answerViewer;
-        useAnswerViewer(newValue);
+        enableAnswerViewer(newValue);
         // localStorage is disabled on embedded mode. Need to use embeddedLocalStorage to write/read.
         window.embeddedLocalStorage.setItem('defaultUseAnswerViewer', JSON.stringify(newValue));
     }
