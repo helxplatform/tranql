@@ -41,7 +41,7 @@
     "react-icons": "^4.2.0",
     "react-json-tree": "^0.11.2",
     "react-notifications": "^1.4.3",
-    "react-scripts": "^5",
+    "react-scripts": "4.0.3",
     "react-sizeme": "^3.0.2",
     "react-spinners": "^0.5.3",
     "react-split-pane": "^0.1.92",
@@ -54,9 +54,9 @@
     "uuid": "^3.4.0"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts --max-old-space-size=4096 build",
-    "test": "react-scripts test --transformIgnorePatterns \"/node_modules/(?!d3-force-graph)/\" --verbose true --testPathIgnorePatterns src/__tests__/mock",
+    "start": "react-app-rewired start",
+    "build": "react-app-rewired --max-old-space-size=4096 build",
+    "test": "react-app-rewired test --transformIgnorePatterns \"/node_modules/(?!d3-force-graph)/\" --verbose true --testPathIgnorePatterns src/__tests__/mock",
     "eject": "react-scripts eject",
     "storybook": "start-storybook -p 6006",
     "build-storybook": "build-storybook"
@@ -75,6 +75,7 @@
     "fake-indexeddb": "^3.1.3",
     "jest-canvas-mock": "^2.3.1",
     "jest-webgl-canvas-mock": "^0.2.3",
+    "react-app-rewired": "^2.2.1",
     "webgl-mock": "^0.1.7",
     "xmldom": "^0.6.0"
   }
