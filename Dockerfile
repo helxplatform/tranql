@@ -26,7 +26,7 @@ COPY --chown=$USER . tranql/
 
 WORKDIR $HOME/tranql/src/tranql/web
 RUN npm install --legacy-peer-deps
-ENV NODE_OPTIONS=--max-old-space-size=512
+ENV NODE_OPTIONS=--max-old-space-size=4096
 ENV GENERATE_SOURCEMAP=false
 RUN npm run build
 
