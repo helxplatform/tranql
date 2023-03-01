@@ -71,7 +71,7 @@ jobs:
 
 ############################## test-image-build ##############################
   test-image-build:
-    needs: flake8-linter
+    needs: flake8-linter-tranql
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
