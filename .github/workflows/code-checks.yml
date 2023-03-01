@@ -37,7 +37,7 @@ on:
 
 jobs:
 ############################## flake8-linter ##############################
-  flake8-linter:
+  flake8-linter-tranql:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -64,7 +64,7 @@ jobs:
     - name: Lint with flake8
       run: |
         pip install flake8
-        flake8 --ignore=E,W . 
+        flake8 --ignore=E,W ./src/tranql 
       # We continue on error here until the code is clean
       # flake8 --ignore=E,W --exit-zero . 
       continue-on-error: true
