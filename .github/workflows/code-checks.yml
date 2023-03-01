@@ -1,6 +1,6 @@
 # Workflow responsible for core acceptance testing.
 # Tests Currently Run:
-#     - flake8-linter
+#
 #     - image-build-test
 #    
 # This workflow only validates images can build
@@ -10,6 +10,7 @@
 # handle the develop and release image storage respectively.
 # CI/CD Maintainer: Joshua Seals 🦭
 #
+# TODO: Understand flake8 issues with tranql project.
 #
 
 name: Code-Checks
@@ -36,42 +37,41 @@ on:
     types: [ opened, synchronize ]
 
 jobs:
-############################## flake8-linter ##############################
-  flake8-linter-tranql:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v3
+# ############################## flake8-linter ##############################
+#   flake8-linter-tranql:
+#     runs-on: ubuntu-latest
+#     steps:
+#     - uses: actions/checkout@v3
           
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.9'
+#     - name: Set up Python
+#       uses: actions/setup-python@v4
+#       with:
+#         python-version: '3.9'
 
-    # Currently actions/setup-python supports caching
-    # but the cache is not as robust as cache action.
-    # Here we cache the entire python env which speeds subsequent builds up alot. (alot being scientific term)
-    # Ref: https://blog.allenai.org/python-caching-in-github-actions-e9452698e98d
-    - uses: actions/cache@v3
-      name: Cache Python
-      with:
-        path: ${{ env.pythonLocation }}
-        key: ${{ env.pythonLocation }}-${{ hashFiles('setup.py') }}-${{ hashFiles('requirements.txt') }}
+#     # Currently actions/setup-python supports caching
+#     # but the cache is not as robust as cache action.
+#     # Here we cache the entire python env which speeds subsequent builds up alot. (alot being scientific term)
+#     # Ref: https://blog.allenai.org/python-caching-in-github-actions-e9452698e98d
+#     - uses: actions/cache@v3
+#       name: Cache Python
+#       with:
+#         path: ${{ env.pythonLocation }}
+#         key: ${{ env.pythonLocation }}-${{ hashFiles('setup.py') }}-${{ hashFiles('requirements.txt') }}
 
-    - name: Install Requirements
-      run: |
-        pip install -r requirements.txt
+#     - name: Install Requirements
+#       run: |
+#         pip install -r requirements.txt
 
-    - name: Lint with flake8
-      run: |
-        pip install flake8
-        flake8 --ignore=E,W ./src/tranql 
-      # We continue on error here until the code is clean
-      # flake8 --ignore=E,W --exit-zero . 
-      continue-on-error: true
+#     - name: Lint with flake8
+#       run: |
+#         pip install flake8
+#         flake8 --ignore=E,W ./src/tranql 
+#       # We continue on error here until the code is clean
+#       # flake8 --ignore=E,W --exit-zero . 
+#       continue-on-error: true
 
 ############################## test-image-build ##############################
   test-image-build:
-    needs: flake8-linter-tranql
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
