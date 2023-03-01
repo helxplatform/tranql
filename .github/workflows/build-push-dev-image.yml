@@ -104,5 +104,5 @@ jobs:
           containers.renci.org/${{ github.repository }}:v${{ steps.version.outputs.version }}
           containers.renci.org/${{ github.repository }}:develop
           containers.renci.org/${{ github.repository }}:${{ steps.vars.outputs.short_sha }}
-        cache-from: type=registry,ref=${{ github.repository }}:buildcache-dev
-        cache-to: type=registry,ref=${{ github.repository }}:buildcache-dev,mode=max
+        cache-from: type=registry,ref=${{ github.repository }}:buildcache
+        cache-to: type=registry,ref=${{ github.repository }}:buildcache,mode=max
