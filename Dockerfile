@@ -1,6 +1,14 @@
+FROM node:14.16.1-alpine as node
 FROM python:3.7.3-alpine
 
-RUN apk add --update build-base git libxslt-dev linux-headers make nodejs-current nodejs-npm zeromq zeromq-dev
+COPY --from=node /usr/lib /usr/lib
+COPY --from=node /usr/local/share /usr/local/share
+COPY --from=node /usr/local/lib /usr/local/lib
+COPY --from=node /usr/local/include /usr/local/include
+COPY --from=node /usr/local/bin /usr/local/bin
+
+RUN apk add --update build-base git libxslt-dev linux-headers make zeromq zeromq-dev
+RUN npm i -g npm@9.4.2
 
 ENV USER tranql
 ENV HOME /home/$USER
@@ -17,8 +25,10 @@ ENV BACKPLANE=http://tranql-backplane.renci.org
 COPY --chown=$USER . tranql/
 
 WORKDIR $HOME/tranql/src/tranql/web
-RUN npm install
-RUN GENERATE_SOURCEMAP=false npm run build
+RUN npm install --legacy-peer-deps
+ENV NODE_OPTIONS=--max-old-space-size=512
+ENV GENERATE_SOURCEMAP=false
+RUN npm run build
 
 WORKDIR $HOME/tranql
 RUN pip install --user --upgrade pip

@@ -19,11 +19,11 @@ spec:
     resources:
       requests:
         cpu: "512m"
-        memory: "1024Mi"
+        memory: "6Gi"
         ephemeral-storage: "4Gi"
       limits:
         cpu: "1024m"
-        memory: "6Gi"
+        memory: "8Gi"
         ephemeral-storage: "5Gi"
     command:
     - /busybox/cat
