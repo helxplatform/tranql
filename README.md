@@ -117,7 +117,7 @@ TranQL is brand new and strictly alpha.
 
 ### Install:
 
-Requires Python 3.7.x.
+Requires Python>=3.10
 
 ```
 git clone <repository>
@@ -128,6 +128,32 @@ pip install -r tranql/requirements.txt
 ```
 bin/test
 ```
+
+### Local Dev Environment
+
+#### Set up local environment variables
+
+```
+export REDIS_PASSWORD=<password>
+export SCHEMA_CONFIG_PATH=./src/tranql/conf/dev-schema.yml
+```
+
+#### Set up `conf.yml`
+
+```
+BACKPLANE: http://localhost:8099
+REDIS: true
+REDIS_PASSWORD: <password>
+
+```
+
+#### Set up a `dev-schema.yml` file
+
+Current default is to use `redis` as the database
+Look at the `dev-schema.yml` file
+
+
+
 ### Run
 
 To run a program, first start the backplane:
