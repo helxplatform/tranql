@@ -69,7 +69,7 @@ definitions_filename = 'definitions.yaml'
 definitions_filename = os.path.join(os.path.dirname(__file__), definitions_filename)
 with open(filename, 'r') as file_obj:
     template = {
-        "definitions": yaml.load(file_obj)["definitions"],
+        "definitions": yaml.full_load(file_obj)["definitions"],
         "tags": [
             {"name": "query"},
             {"name": "schema"},
@@ -79,7 +79,7 @@ with open(filename, 'r') as file_obj:
         ]
     }
     with open(definitions_filename, 'r') as definitions_file:
-        template['definitions'].update(yaml.load(definitions_file))
+        template['definitions'].update(yaml.full_load(definitions_file))
 
 swagger = Swagger(app, template=template, config={
     "headers": [

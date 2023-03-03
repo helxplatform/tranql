@@ -13,6 +13,6 @@ services:
       - ./src:/home/tranql/tranql/src
       - ./dev-schema.yaml:/home/tranql/dev-schema.yaml
   redis_graph:
-    image: redislabs/redisgraph
+    image: redislabs/redisgraph:2.10.9
     volumes:
       - ./redis_data:/data
