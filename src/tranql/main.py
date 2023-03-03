@@ -93,9 +93,9 @@ class TranQL:
     def __init__(self, backplane="http://localhost:8099", options={}):
         """ Initialize the interpreter. """
         self.context = Context ()
-        config_path = "conf.yml"
-        self.config = Config (config_path)
+        self.config = Config (options.get('config_file'))
 
+        # TODO: Why is this used?
         t = os.path.join (os.path.dirname (__file__), "conf.test")
         with open(t, "w") as stream:
             stream.write (f" --- backplane: {self.config['BACKPLANE']}")
@@ -231,6 +231,7 @@ def main ():
         formatter_class=lambda prog: argparse.ArgumentDefaultsHelpFormatter(prog,
                                                             max_help_position=180))
     arg_parser.add_argument('-v', '--verbose', help="Verbose mode.", action="store_true")
+    arg_parser.add_argument('-f', '--conf', help="Configuration file", default='conf.yml')
     arg_parser.add_argument('-c', '--cache',
                             help="Cache responses from backplane services?",
                             action="store_true")
@@ -242,7 +243,7 @@ def main ():
                             action="store_true")
     arg_parser.add_argument('-s', '--source', help="The program's source file")
     arg_parser.add_argument('-o', '--output', help="Output destination")
-    arg_parser.add_argument('-a', '--arg', help="Output destination",
+    arg_parser.add_argument('-a', '--arg', help="Some args",
                             action="append", default=[])
     # -x is placeholder as '-a' taken; should eventually replace with a more fitting letter
     arg_parser.add_argument('-x', '--asynchronous', default=True, help="Run requests asynchronously resulting in faster queries")
@@ -271,6 +272,7 @@ def main ():
         "dynamic_id_resolution",
         "registry"
     ]}
+    options['config_file'] = args.conf
     tranql = TranQL (backplane = args.backplane, options = options)
     for k, v in query_args.items ():
         logger.debug (f"setting {k}={v}")

@@ -8,10 +8,10 @@ services:
       - "8001:8001"
     command: gunicorn --workers=1 --bind=0.0.0.0:8001 --name=tranql --timeout=600 --reload tranql.api:app
     environment:
-      - SCHEMA_CONFIG_PATH=/home/tranql/dev-schema.yaml
+      - SCHEMA_CONFIG_PATH=/home/tranql/schema.yaml
     volumes:
       - ./src:/home/tranql/tranql/src
-      - ./src/tranql/conf/dev-schema.yml:/home/tranql/dev-schema.yaml
+      - ./src/tranql/conf/redis-schema.yml:/home/tranql/schema.yaml
 
   #################################################################################
   ##

@@ -131,40 +131,66 @@ bin/test
 
 ### Local Dev Environment
 
-#### Set up local environment variables
+Run `TranQL` locally in a development environment. This set up uses the `./src/tranql/dev-conf.yml` configuration file
+and the `./src/tranql/conf/dev-schema.yml` file. Update those to edit your local configuration.
 
+1. Set up local environment variables
 ```
 export REDIS_PASSWORD=<password>
 export SCHEMA_CONFIG_PATH=./src/tranql/conf/dev-schema.yml
 ```
 
-#### Set up `conf.yml`
+2. Look at `dev-schema.yml` file
+    - Current default is to use `redis` as the database
+
+3. Install an editable build
 
 ```
-BACKPLANE: http://localhost:8099
-REDIS: true
-REDIS_PASSWORD: <password>
-
+pip install -e .
 ```
 
-#### Set up a `dev-schema.yml` file
+4. Choose your server
+    - Non-docker: 
+    To run a program, first start the backplane:
+        ```
+        cd backplane
+        PYTHONPATH=$PWD/../.. python server.py
+        ```
+    - Docker with redis
+        ```
+        docker-compose build redis
+        docker-compose up redis
+        ```
+5. Run a query
 
-Current default is to use `redis` as the database
-Look at the `dev-schema.yml` file
-
-
-
-### Run
-
-To run a program, first start the backplane:
 ```
-cd backplane
-PYTHONPATH=$PWD/../.. python server.py
+python main.py --source queries/workflow-5.tranql 
 ```
-Then run the query:
+
+### Local Docker Environment
+
+Run `TranQL` in a local docker environment using `docker-compose`. This will use the configurations 
+in the docker the `docker-compose.yml` file 
+
+1. Set the local environment variables
 ```
-bin/tranql --source tranql/queries/workflow-5.tranql
+export REDIS_PASSWORD=<password>
+export SCHEMA_CONFIG_PATH=./src/tranql/conf/dev-schema.yml
 ```
+
+2. Build and start the docker containers
+```
+docker-compose build
+docker-compose up
+```
+
+3. Run a query
+
+```
+python main.py --source queries/workflow-5.tranql 
+```
+
+
 ### Web app
 
 To run the web app, first start the TranQL API:
@@ -175,6 +201,7 @@ PYTHONPATH=$PWD/../ python api.py
 ```
 
 Then follow the instructions in web/ to start the website.
+
 ### Shell
 
 Run the interactive interpreter.
