@@ -175,7 +175,7 @@ in the docker the `docker-compose.yml` file
 1. Set the local environment variables
 ```
 export REDIS_PASSWORD=<password>
-export SCHEMA_CONFIG_PATH=./src/tranql/conf/dev-schema.yml
+export SCHEMA_CONFIG_PATH=./src/tranql/conf/redis-schema.yml
 ```
 
 2. Build and start the docker containers

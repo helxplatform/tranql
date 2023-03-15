@@ -13,7 +13,7 @@ jsonpath-rw==1.4.0
 linkml==1.4.6
 linkml-dataops==0.1.0
 linkml-runtime==1.3.2
-MarkupSafe==2.0.1
+MarkupSafe==2.1.1
 openapi==1.1.0
 git+https://github.com/helxplatform/Plater.git@v2.0.1
 git+https://github.com/TranslatorSRI/reasoner-pydantic@v1.0.0#egg=reasoner-pydantic
@@ -31,6 +31,6 @@ pytest-cov==2.7.1
 python-coveralls==2.9.2
 python-dateutil==2.8.1
 redis==4.1.4
-Werkzeug==2.0.3
+Werkzeug==2.2.3
 urllib3==1.26.8
 uvicorn==0.11.7
