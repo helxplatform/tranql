@@ -7,8 +7,7 @@ services:
     ports:
       - "8001:8001"
     command: gunicorn --workers=1 --bind=0.0.0.0:8001 --name=tranql --timeout=600 --reload tranql.api:app
-    environment:
-      - SCHEMA_CONFIG_PATH=/home/tranql/schema.yaml
+    env_file: .env
     volumes:
       - ./src:/home/tranql/tranql/src
       - ./src/tranql/conf/redis-schema.yml:/home/tranql/schema.yaml
@@ -26,3 +25,5 @@ services:
       - REDIS_DISABLE_COMMANDS=FLUSHDB,FLUSHALL
     ports:
       - '6379:6379'
+    volumes:
+      - ./redis_data:/data
