@@ -93,7 +93,8 @@ class TranQL:
     def __init__(self, backplane="http://localhost:8099", options={}):
         """ Initialize the interpreter. """
         self.context = Context ()
-        self.config = Config (options.get('config_file'))
+        config_path = "conf.yml"
+        self.config = Config (config_path)
 
         # TODO: Why is this used?
         t = os.path.join (os.path.dirname (__file__), "conf.test")
