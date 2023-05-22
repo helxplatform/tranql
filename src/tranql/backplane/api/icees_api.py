@@ -244,7 +244,7 @@ class ICEESClusterQuery(StandardAPIResource):
         """
         if concept_type_str.startswith('biolink:'):
             return concept_type_str
-        return 'biolink:' + string.capwords(concept_type_str.replace('_', ' '), ' ').replace(' ', '')
+        return string.capwords(concept_type_str.replace('_', ' '), ' ').replace(' ', '')
 
     def synonymize(self, response):
         knowledge_map_key = 'knowledge_map'

@@ -404,7 +404,7 @@ class Schema:
             return
         
         def toBiolink(concept):
-            return "biolink:" + title_case(concept)
+            return title_case(concept)
 
         redis_adapter = RedisAdapter()
         adapter = redis_adapter._get_adapter(name)
@@ -422,7 +422,7 @@ class Schema:
                 if isinstance(links, str):
                     links = [links]
                 for link in links:
-                    biolink_link = "biolink:" + link
+                    biolink_link = link
                     if not biolink_link in edge_summary: continue
                     (_, _, _, edge_data) = self.schema_graph.get_edge (source_name, target_type, link)
                     individual_count = edge_summary[biolink_link]

@@ -959,7 +959,7 @@ class Query:
         elif isinstance (key, Edge):
             self.arrows.append (key)
         elif isinstance(key, list) and len(key) == 3:
-            predicate = f'biolink:{key[1]}'
+            predicate = f'{key[1]}'
             if key[2].endswith(self.forward_arrow):
                 self.arrows.append (Edge(direction=self.forward_arrow,
                                          predicate=predicate))
@@ -982,7 +982,7 @@ class Query:
             if self.concept_model.get (type_name) == None or type_name not in self.concept_model:
                 raise Exception(f'Concept "{type_name}" is not in the concept model.')
             # For now just do manual string manipulation for type name
-            type_name = f'biolink:' + type_name.replace('_', ' ').title().replace(' ', '')
+            type_name = f'' + type_name.replace('_', ' ').title().replace(' ', '')
             self.concepts[name] = Concept (name=name, type_name=type_name)
     def __getitem__(self, key):
         return self.concepts [key]
