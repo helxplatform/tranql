@@ -670,7 +670,7 @@ class AutocompleteTerm(StandardAPIResource):
                 type: string
               allowed_concept_types:
                 description: >
-                  List of allowed biolink types to search against, e.g. biolink:Disease.
+                  List of allowed biolink types to search against, e.g. biolink.Disease.
                   If null or empty, the search will execute against all supported types.
                   Note that if searching against all types, a very high `query_limit` should be specified
                   since it will be distributed evenly across every supported concept index in the redisgraph
@@ -707,7 +707,7 @@ class AutocompleteTerm(StandardAPIResource):
     """
     query = request.json["query"]
     # Indexes are equal to node labels in the redisgraph instance,
-    # and each node label is simply a biolink concept type, e.g. biolink:Disease
+    # and each node label is simply a biolink concept type, e.g. biolink.Disease
     indexes = request.json.get("allowed_concept_types", None)
     fields = request.json.get("fields", None)
     prefix_search = request.json.get("prefix_search", True)
@@ -740,7 +740,7 @@ class AutocompleteTerm(StandardAPIResource):
         "prefix_search": prefix_search,
         # Ensure results are linked to studies
         "postprocessing_cypher": "MATCH (:`StudyVariable`)-[]-(node)" if study_linked else "",
-        # "postprocessing_cypher": "MATCH ()-[:`biolink:Association`|`biolink:association`|`biolink:Mentions`|`biolink:mentions`]->(node)" if study_linked else "",
+        # "postprocessing_cypher": "MATCH ()-[:`biolink.Association`|`biolink.association`|`biolink.Mentions`|`biolink.mentions`]->(node)" if study_linked else "",
         "levenshtein_distance": levenshtein_distance,
         "query_limit": query_limit
       }
