@@ -404,7 +404,7 @@ class Schema:
             return
         
         def toBiolink(concept):
-            return title_case(concept)
+            return "biolink:" + title_case(concept)
 
         redis_adapter = RedisAdapter()
         adapter = redis_adapter._get_adapter(name)

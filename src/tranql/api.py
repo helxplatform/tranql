@@ -728,7 +728,7 @@ class AutocompleteTerm(StandardAPIResource):
 
     if indexes is None or len(indexes) == 0:
       concept_types = schema.schema[redis_schema_name]["schema"].keys()
-      indexes = [title_case(concept_type) for concept_type in concept_types]
+      indexes = ["biolink." + title_case(concept_type) for concept_type in concept_types]
 
 
     return redis_adapter.search(
@@ -739,7 +739,7 @@ class AutocompleteTerm(StandardAPIResource):
       options={
         "prefix_search": prefix_search,
         # Ensure results are linked to studies
-        "postprocessing_cypher": "MATCH (:`StudyVariable`)-[]-(node)" if study_linked else "",
+        "postprocessing_cypher": "MATCH (:`biolink.StudyVariable`)-[]-(node)" if study_linked else "",
         # "postprocessing_cypher": "MATCH ()-[:`biolink.Association`|`biolink.association`|`biolink.Mentions`|`biolink.mentions`]->(node)" if study_linked else "",
         "levenshtein_distance": levenshtein_distance,
         "query_limit": query_limit
