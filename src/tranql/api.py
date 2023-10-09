@@ -549,7 +549,7 @@ class SchemaGraph(StandardAPIResource):
               default: false
               description: Specifies if dynamic id lookup of curies will be performed
         """
-        force_update = request.args.get("force_update")
+        force_update = request.args.get("force_update").lower() == 'true'
         tranql = TranQL (options={"registry": app.config.get('registry', False)})
         schemafactory = tranql.schema_factory
         schema = schemafactory.get_instance(force_update=force_update)
