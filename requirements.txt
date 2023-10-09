@@ -1,13 +1,12 @@
-aiohttp==3.8.4
+aiohttp==3.8.6
 bmt==0.8.12
 coverage==4.5.3
 flasgger==0.9.5
-Flask==2.3.2
+Flask==2.2.5
 Flask-Compress==1.13
 Flask-Cors==3.0.10
 flask-restx>=1.0.3
-gunicorn==19.9.0
-itsdangerous==2.0.1
+gunicorn==21.2.0
 Jinja2==3.1.2
 jsonpath-rw==1.4.0
 linkml==1.4.6
@@ -31,6 +30,6 @@ pytest-cov==2.7.1
 python-coveralls==2.9.2
 python-dateutil==2.8.1
 redis==4.1.4
-Werkzeug==2.2.3
-urllib3==1.26.8
+werkzeug==2.2.3
+urllib3==1.26.17
 uvicorn
