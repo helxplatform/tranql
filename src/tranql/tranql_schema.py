@@ -360,15 +360,15 @@ class Schema:
     def snake_case_schema(self, schema):
         new_schema = {}
         for node in schema:
-            new_node_name = snake_case(node.replace('biolink:', ''))
+            new_node_name = snake_case(node.replace('biolink.', ''))
             sub_nodes = schema[node]
             new_schema[new_node_name] = new_schema.get(new_node_name, {})
             for sub_node in sub_nodes:
-                new_subnode_name = snake_case(sub_node.replace('biolink:', ''))
+                new_subnode_name = snake_case(sub_node.replace('biolink.', ''))
                 new_schema[new_node_name][new_subnode_name] = new_schema[new_node_name].get(new_subnode_name, [])
                 predicates = sub_nodes[sub_node]
                 for predicate in predicates:
-                    new_predicate = snake_case(predicate.replace('biolink:', ''))
+                    new_predicate = snake_case(predicate.replace('biolink.', ''))
                     if new_predicate not in new_schema[new_node_name][new_subnode_name]:
                         new_schema[new_node_name][new_subnode_name].append(new_predicate)
         return new_schema
@@ -422,7 +422,7 @@ class Schema:
                 if isinstance(links, str):
                     links = [links]
                 for link in links:
-                    biolink_link = "biolink:" + link
+                    biolink_link = link
                     if not biolink_link in edge_summary: continue
                     (_, _, _, edge_data) = self.schema_graph.get_edge (source_name, target_type, link)
                     individual_count = edge_summary[biolink_link]
@@ -531,8 +531,8 @@ class Schema:
         :param source_type: A source type.
         :param target_type: A target type.
         """
-        source_type = snake_case(source_type.replace('biolink:', ''))
-        target_type = snake_case(target_type.replace('biolink:', ''))
+        source_type = snake_case(source_type.replace('biolink.', ''))
+        target_type = snake_case(target_type.replace('biolink.', ''))
         edge = self.schema_graph.get_edge (start=source_type, end=target_type)
         if not edge:
             raise InvalidTransitionException (source_type, target_type, explanation=f'No valid transitions exist between {source_type} and {target_type} in this schema.')

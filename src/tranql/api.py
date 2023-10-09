@@ -69,7 +69,7 @@ definitions_filename = 'definitions.yaml'
 definitions_filename = os.path.join(os.path.dirname(__file__), definitions_filename)
 with open(filename, 'r') as file_obj:
     template = {
-        "definitions": yaml.load(file_obj)["definitions"],
+        "definitions": yaml.full_load(file_obj)["definitions"],
         "tags": [
             {"name": "query"},
             {"name": "schema"},
@@ -79,7 +79,7 @@ with open(filename, 'r') as file_obj:
         ]
     }
     with open(definitions_filename, 'r') as definitions_file:
-        template['definitions'].update(yaml.load(definitions_file))
+        template['definitions'].update(yaml.full_load(definitions_file))
 
 swagger = Swagger(app, template=template, config={
     "headers": [
@@ -670,7 +670,7 @@ class AutocompleteTerm(StandardAPIResource):
                 type: string
               allowed_concept_types:
                 description: >
-                  List of allowed biolink types to search against, e.g. biolink:Disease.
+                  List of allowed biolink types to search against, e.g. biolink.Disease.
                   If null or empty, the search will execute against all supported types.
                   Note that if searching against all types, a very high `query_limit` should be specified
                   since it will be distributed evenly across every supported concept index in the redisgraph
@@ -707,7 +707,7 @@ class AutocompleteTerm(StandardAPIResource):
     """
     query = request.json["query"]
     # Indexes are equal to node labels in the redisgraph instance,
-    # and each node label is simply a biolink concept type, e.g. biolink:Disease
+    # and each node label is simply a biolink concept type, e.g. biolink.Disease
     indexes = request.json.get("allowed_concept_types", None)
     fields = request.json.get("fields", None)
     prefix_search = request.json.get("prefix_search", True)
@@ -728,7 +728,7 @@ class AutocompleteTerm(StandardAPIResource):
 
     if indexes is None or len(indexes) == 0:
       concept_types = schema.schema[redis_schema_name]["schema"].keys()
-      indexes = ["biolink:" + title_case(concept_type) for concept_type in concept_types]
+      indexes = ["biolink." + title_case(concept_type) for concept_type in concept_types]
 
 
     return redis_adapter.search(
@@ -739,8 +739,8 @@ class AutocompleteTerm(StandardAPIResource):
       options={
         "prefix_search": prefix_search,
         # Ensure results are linked to studies
-        "postprocessing_cypher": "MATCH (:`biolink:StudyVariable`)-[]-(node)" if study_linked else "",
-        # "postprocessing_cypher": "MATCH ()-[:`biolink:Association`|`biolink:association`|`biolink:Mentions`|`biolink:mentions`]->(node)" if study_linked else "",
+        "postprocessing_cypher": "MATCH (:`biolink.StudyVariable`)-[]-(node)" if study_linked else "",
+        # "postprocessing_cypher": "MATCH ()-[:`biolink.Association`|`biolink.association`|`biolink.Mentions`|`biolink.mentions`]->(node)" if study_linked else "",
         "levenshtein_distance": levenshtein_distance,
         "query_limit": query_limit
       }

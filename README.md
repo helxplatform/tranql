@@ -117,7 +117,7 @@ TranQL is brand new and strictly alpha.
 
 ### Install:
 
-Requires Python 3.7.x.
+Requires Python>=3.10
 
 ```
 git clone <repository>
@@ -128,17 +128,69 @@ pip install -r tranql/requirements.txt
 ```
 bin/test
 ```
-### Run
 
-To run a program, first start the backplane:
+### Local Dev Environment
+
+Run `TranQL` locally in a development environment. This set up uses the `./src/tranql/dev-conf.yml` configuration file
+and the `./src/tranql/conf/dev-schema.yml` file. Update those to edit your local configuration.
+
+1. Set up local environment variables
 ```
-cd backplane
-PYTHONPATH=$PWD/../.. python server.py
+export REDIS_PASSWORD=<password>
+export SCHEMA_CONFIG_PATH=./src/tranql/conf/dev-schema.yml
 ```
-Then run the query:
+
+2. Look at `dev-schema.yml` file
+    - Current default is to use `redis` as the database
+
+3. Install an editable build
+
 ```
-bin/tranql --source tranql/queries/workflow-5.tranql
+pip install -e .
 ```
+
+4. Choose your server
+    - Non-docker: 
+    To run a program, first start the backplane:
+        ```
+        cd backplane
+        PYTHONPATH=$PWD/../.. python server.py
+        ```
+    - Docker with redis
+        ```
+        docker-compose build redis
+        docker-compose up redis
+        ```
+5. Run a query
+
+```
+python main.py --source queries/workflow-5.tranql 
+```
+
+### Local Docker Environment
+
+Run `TranQL` in a local docker environment using `docker-compose`. This will use the configurations 
+in the docker the `docker-compose.yml` file 
+
+1. Set the local environment variables
+```
+export REDIS_PASSWORD=<password>
+export SCHEMA_CONFIG_PATH=./src/tranql/conf/redis-schema.yml
+```
+
+2. Build and start the docker containers
+```
+docker-compose build
+docker-compose up
+```
+
+3. Run a query
+
+```
+python main.py --source queries/workflow-5.tranql 
+```
+
+
 ### Web app
 
 To run the web app, first start the TranQL API:
@@ -149,6 +201,7 @@ PYTHONPATH=$PWD/../ python api.py
 ```
 
 Then follow the instructions in web/ to start the website.
+
 ### Shell
 
 Run the interactive interpreter.

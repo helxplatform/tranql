@@ -1021,7 +1021,7 @@ class App extends Component {
    */
    _categoryToType(value) {
     if (value) {
-      const blStr = "biolink:";
+      const blStr = "biolink.";
       var typeVal = value.substring(blStr.length, value.length);
       return typeVal.match(/[A-Z]{2,}(?=[A-Z][a-z]+[0-9]*|\b)|[A-Z]?[a-z]+[0-9]*|[A-Z]|[0-9]+/g)
              .map(x => x.toLowerCase())
@@ -1036,7 +1036,7 @@ class App extends Component {
    */
   _typeToCategory(value) {
     if (value) {
-      const blStr = "biolink:";
+      const blStr = "biolink.";
       const constituents = value.split("_");
       const titleCaseValue = constituents.map((word) => word[0].toUpperCase() + word.slice(1)).join("");
       return blStr + titleCaseValue;
@@ -1083,7 +1083,7 @@ class App extends Component {
         link["source_id"] = link["subject"];
         link["target_id"] = link["object"];
         if (link["predicate"] !== undefined && link["predicate"] !== null) {
-          const blStr = "biolink:";
+          const blStr = "biolink.";
           const predStr = link["predicate"];
           const typeVal = predStr.substring(blStr.length, predStr.length);
           link["type"] = typeVal;

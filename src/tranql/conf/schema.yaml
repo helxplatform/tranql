@@ -63,7 +63,7 @@ schema:
     url: "redis:test"
     redis: true
     redis_connection_params:
-      host: redis_graph
+      host: merge-redis-master
       port: 6379
         # SET USERNAME and PASSWORD
         # via ROGER_USERNAME , ROGER_PASSWORD Env vars (i.e capitialize service name)

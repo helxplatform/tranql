@@ -1,0 +1,4 @@
+---
+BACKPLANE: http://localhost:8099
+REDIS: true
+REDIS_PASSWORD: $REDIS_PASSWORD 

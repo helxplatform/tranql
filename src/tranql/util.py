@@ -4,7 +4,7 @@ import importlib
 import json
 import os
 import re
-from collections import Iterable
+from collections.abc import Iterable
 from tranql.disease_vocab import DiseaseVocab
 from jinja2 import Template
 import copy
