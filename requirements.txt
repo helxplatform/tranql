@@ -20,7 +20,7 @@ git+https://github.com/TranslatorSRI/reasoner-pydantic@v1.0.0#egg=reasoner-pydan
 git+https://github.com/TranslatorSRI/reasoner-converter@1.2.4#egg=reasoner-converter
 reasoner-transpiler==1.7.1
 redis==4.1.4
-requests==2.28.2
+requests==2.31.0
 requests-cache==0.4.13
 requests-mock==1.5.2
 PyYAML==6.0
@@ -31,6 +31,6 @@ pytest-cov==2.7.1
 python-coveralls==2.9.2
 python-dateutil==2.8.1
 redis==4.1.4
-Werkzeug==2.1.2
+Werkzeug==2.2.3
 urllib3==1.26.8
 uvicorn
