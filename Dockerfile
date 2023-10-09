@@ -3,7 +3,7 @@ FROM python:3.10.10-alpine3.17
 # FROM python:3.7.3-alpine OLD
 
 RUN apk add --update build-base git libxslt-dev linux-headers make nodejs-current npm zeromq zeromq-dev
-
+RUN apk upgrade libssl3 libcrypto3 ncurses-libs
 
 ENV USER tranql
 ENV HOME /home/$USER
