@@ -4,66 +4,14 @@ doc : |
   describe transitions between biolink-model types. These transitions are
   expressed as predicates, also from the biolink-model.
 schema:
-  # indigo :
-  #   doc: |
-  #     The Indigo reasoner provides an endpoint for returning the transitions it supports.
-  #   url: /graph/indigo
-  #   schema: https://indigo.ncats.io/reasoner/api/v1/predicates
-  robokop :
-    doc: |
-      The Robokop reasoner provides an endpoint returning the transitions it supports.
-    url: /graph/gamma/quick
-    schema: /graph/gamma/predicates
-  icees :
-    doc: |
-      We point at the ICEES clinical reasoners schema endpoint, mapping questions it is
-      capable of answering. For backplane URLs, the protocol, host, and port are implicit.
-      The ICEES schema endpoint requires additional formatting and handling which we take care
-      of in the backplane wrapper.
-    url: /clinical/cohort/disease_to_chemical_exposure?provider=icees
-    schema: /clincial/icees/schema?provider=icees
-
-  icees3_and_epr:
-    doc: |
-      We point at the ICEES clinical reasoners schema endpoint, mapping questions it is
-      capable of answering. For backplane URLs, the protocol, host, and port are implicit.
-      The ICEES schema endpoint requires additional formatting and handling which we take care
-      of in the backplane wrapper.
-    url: /clinical/cohort/disease_to_chemical_exposure?provider=icees3_and_epr
-    schema: /clincial/icees/schema?provider=icees3_and_epr
-
-  automat :
-    doc: |
-      Automat is a registry of several KPs. We have a backplane url to route to each of its entries.
-      When constracting our schema, we could ask for what is available on automat and add each KP's
-      graph schema to our schema.
-    registry: automat
-    registry_url: /graph/automat/
-    exclude:
-      - "cord19_scibite_v2"
-      - "cord19_scigraph_v2"
-  rtx :
-    doc: |
-      The Rtx reasoner provides an endpoint returning the transitions it supports.
-    url: /graph/rtx
-    schema: /graph/rtx/predicates
-  implicit_conversion:
-    doc: |
-      Implicit conversions bridge segments of a query. If one reasoner can return a drug exposure
-      and another can take a chemical substance, implicit conversion provides a bridge between these
-      types allowing the implementation of complex queries.
-    url: /implicit_conversion
-    schema:
-      biolink:DrugExposure:
-        biolink:ChemicalSubstance:
-          - is_a
+  
   redis:
     doc: |
       Roger is a knowledge graph built by aggregeting several kgx formatted knowledge graphs from several sources.
     url: "redis:test"
     redis: true
     redis_connection_params:
-      host: merge-redis-master
+      host: localhost
       port: 6379
         # SET USERNAME and PASSWORD
         # via ROGER_USERNAME , ROGER_PASSWORD Env vars (i.e capitialize service name)
