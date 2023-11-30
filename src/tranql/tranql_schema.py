@@ -304,7 +304,9 @@ class Schema:
             if metadata.get('redis', False) and not skip_redis:
                 redis_adapter = RedisAdapter()
                 redis_adapter.set_adapter(schema_name, metadata.get('redis_connection_params'), tranql_config)
-                metadata['schema'] = self.snake_case_schema(redis_adapter.get_schema(schema_name))
+                raw_schema = redis_adapter.get_schema(schema_name)
+                snake_schema = self.snake_case_schema(raw_schema)
+                metadata['schema'] = snake_schema
             if 'registry' in metadata:
                 if use_registry:
                     registry_name = metadata['registry']
@@ -360,15 +362,15 @@ class Schema:
     def snake_case_schema(self, schema):
         new_schema = {}
         for node in schema:
-            new_node_name = snake_case(node.replace('biolink.', ''))
+            new_node_name = snake_case(node.replace('biolink:', ''))
             sub_nodes = schema[node]
             new_schema[new_node_name] = new_schema.get(new_node_name, {})
             for sub_node in sub_nodes:
-                new_subnode_name = snake_case(sub_node.replace('biolink.', ''))
+                new_subnode_name = snake_case(sub_node.replace('biolink:', ''))
                 new_schema[new_node_name][new_subnode_name] = new_schema[new_node_name].get(new_subnode_name, [])
                 predicates = sub_nodes[sub_node]
                 for predicate in predicates:
-                    new_predicate = snake_case(predicate.replace('biolink.', ''))
+                    new_predicate = snake_case(predicate.replace('biolink:', ''))
                     if new_predicate not in new_schema[new_node_name][new_subnode_name]:
                         new_schema[new_node_name][new_subnode_name].append(new_predicate)
         return new_schema
