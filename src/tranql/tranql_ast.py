@@ -1027,9 +1027,8 @@ class QueryPlanStrategy:
         edge = None
         schema = None
         converted = False
-
-        source_type = snake_case(source.type_name.replace('biolink.', ''))
-        target_type = snake_case(target.type_name.replace('biolink.', ''))
+        source_type = snake_case(source.type_name.replace('biolink:', ''))
+        target_type = snake_case(target.type_name.replace('biolink:', ''))
         if predicate.direction == Query.back_arrow:
             source_type, target_type = target_type, source_type
 
