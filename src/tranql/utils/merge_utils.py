@@ -12,7 +12,7 @@ QUESTION_GRAPH_KEY = 'query_graph'
 KNOWLEDGE_GRAPH_KEY = 'knowledge_graph'
 KNOWLEDGE_MAP_KEY = 'results'
 
-BL_VERSION = "1.6.1"
+BL_VERSION = "v4.2.0"
 toolkit = Toolkit(schema=f"https://raw.githubusercontent.com/biolink/biolink-model/{BL_VERSION}/biolink-model.yaml")
 
 

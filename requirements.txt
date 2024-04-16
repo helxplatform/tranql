@@ -1,5 +1,5 @@
 aiohttp==3.8.6
-bmt==1.1.2
+bmt==1.4.0
 coverage==4.5.3
 flasgger==0.9.5
 Flask==2.2.5
@@ -19,14 +19,13 @@ redis==4.1.4
 requests==2.31.0
 requests-cache==0.4.13
 requests-mock==1.5.2
-PyYAML==6.0.1
+PyYAML
 python-Levenshtein==0.12.2
 networkx==2.8.8
 pytest==5.4.1
 pytest-cov==2.7.1
 python-coveralls==2.9.2
 python-dateutil==2.8.1
-redis==4.1.4
 werkzeug==2.2.3
 urllib3==1.26.17
 uvicorn
