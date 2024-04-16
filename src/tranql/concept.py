@@ -12,7 +12,7 @@ class ConceptModel:
     def __init__(self, name):
         if not ConceptModel.bl_toolkit:
             ConceptModel.bl_toolkit = Toolkit(f"https://raw.githubusercontent.com/biolink/biolink-model"
-                f"/{os.environ.get('BL_VERSION', '2.1.0')}/biolink-model.yaml")
+                f"/{os.environ.get('BL_VERSION', 'v4.2.0')}/biolink-model.yaml")
         self.toolkit = ConceptModel.bl_toolkit
         self.all_entities = [snake_case(x) for x in self.toolkit.get_all_entities()]
         self.all_slots = [snake_case(x) for x in self.toolkit.get_all_slots()]
