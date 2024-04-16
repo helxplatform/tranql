@@ -5,6 +5,7 @@ import argparse
 import logging
 import os
 import yaml
+from yaml import BaseLoader
 from flask import Flask
 from flask_restx import Api
 from flasgger import Swagger
@@ -30,9 +31,9 @@ filename = 'translator_interchange.yaml'
 filename = os.path.join (os.path.dirname (__file__), 'translator_interchange.yaml')
 definitions_filename = os.path.join (os.path.dirname (__file__), 'definitions.yaml')
 with open(filename, 'r') as file_obj:
-    template = yaml.load(file_obj)
+    template = yaml.load(file_obj, BaseLoader)
     with open(definitions_filename, 'r') as definitions_file:
-        template["definitions"].update(yaml.load(definitions_file))
+        template["definitions"].update(yaml.load(definitions_file, BaseLoader))
     template["tags"] = [
         {"name" : "schema"},
         {"name" : "query"},

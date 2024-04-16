@@ -304,7 +304,7 @@ class SelectStatement(Statement):
         if not isinstance(type_names, list):
             type_names = [type_names]
         result = []
-        type_names = [snake_case(type_name.replace('biolink:', '')) for type_name in type_names]
+        type_names = [snake_case(type_name.replace('biolink.', '')) for type_name in type_names]
         for type_name in type_names:
             equivalent_identifiers = Bionames.get_ids (name, type_name)
             for i in equivalent_identifiers:
@@ -1027,7 +1027,6 @@ class QueryPlanStrategy:
         edge = None
         schema = None
         converted = False
-
         source_type = snake_case(source.type_name.replace('biolink:', ''))
         target_type = snake_case(target.type_name.replace('biolink:', ''))
         if predicate.direction == Query.back_arrow:

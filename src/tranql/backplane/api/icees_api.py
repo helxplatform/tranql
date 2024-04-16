@@ -238,13 +238,13 @@ class ICEESClusterQuery(StandardAPIResource):
 
     def curify_type(self, concept_type_str):
         """
-        Converts to biolink:TypeOfConcept from type_of_concept
+        Converts to biolink.TypeOfConcept from type_of_concept
         :param concept_type_str
-        :return: pascal case of type with prefix biolink:
+        :return: pascal case of type with prefix biolink.
         """
-        if concept_type_str.startswith('biolink:'):
+        if concept_type_str.startswith('biolink.'):
             return concept_type_str
-        return 'biolink:' + string.capwords(concept_type_str.replace('_', ' '), ' ').replace(' ', '')
+        return string.capwords(concept_type_str.replace('_', ' '), ' ').replace(' ', '')
 
     def synonymize(self, response):
         knowledge_map_key = 'knowledge_map'

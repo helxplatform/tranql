@@ -20,7 +20,7 @@ import {
 import 'react-confirm-alert/src/react-confirm-alert.css';
 import { ResponsiveContainer, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip } from 'recharts';
 import InlineEdit from 'react-edit-inline2';
-import DefaultTooltipContent from 'recharts/lib/component/DefaultTooltipContent';
+import { DefaultTooltipContent } from 'recharts/lib/component/DefaultTooltipContent';
 //import Tooltip from 'rc-tooltip';
 import ReactTooltip from 'react-tooltip';
 import { NotificationContainer , NotificationManager } from 'react-notifications';
@@ -1021,11 +1021,25 @@ class App extends Component {
    */
    _categoryToType(value) {
     if (value) {
-      const blStr = "biolink:";
+      const blStr = "biolink.";
       var typeVal = value.substring(blStr.length, value.length);
       return typeVal.match(/[A-Z]{2,}(?=[A-Z][a-z]+[0-9]*|\b)|[A-Z]?[a-z]+[0-9]*|[A-Z]|[0-9]+/g)
              .map(x => x.toLowerCase())
              .join('_');
+    }
+  }
+  /**
+   * Convert a string from TRAPI 0.9 type to TRAPI 1.0 category.
+   * 
+   * @param {String} value - String to convert.
+   * @private
+   */
+  _typeToCategory(value) {
+    if (value) {
+      const blStr = "biolink.";
+      const constituents = value.split("_");
+      const titleCaseValue = constituents.map((word) => word[0].toUpperCase() + word.slice(1)).join("");
+      return blStr + titleCaseValue;
     }
   }
 
@@ -1069,7 +1083,7 @@ class App extends Component {
         link["source_id"] = link["subject"];
         link["target_id"] = link["object"];
         if (link["predicate"] !== undefined && link["predicate"] !== null) {
-          const blStr = "biolink:";
+          const blStr = "biolink.";
           const predStr = link["predicate"];
           const typeVal = predStr.substring(blStr.length, predStr.length);
           link["type"] = typeVal;
@@ -1218,100 +1232,57 @@ class App extends Component {
       )
   }
   /**
-   * Query name-resolution-sri to resolve ontological identifiers from concept names.
-   * For example, go from "asthma" -> ["MONDO:XXX", "MONDO:YYY", "DOID:ZZZ"]
+   * Autocomplete an English term for a concept.
+   * For example, go from "asthma" -> ["asthma", "allergic asthma", "childhood onset asthma"] -> returns ["MONDO:XXX", "MONDO:YYY", "DOID:ZZZ"]
    * 
    * As a side-effect, it caches these values in `state.autocompleteResolvedIdentifiers`
    * for use in autocomplete tooltips.
    * 
    * @param {string} conceptValue - The value of the concept, e.g., "asthma" or "asth". If this param is a less than two characters, the method will return an empty object.
    * @param {string} conceptType - The concept itself, e.g., "disease" or "chemical_substance"
-   * @param {number} [resultLimit=50] - Limit the number of identifiers that will be returned from a concept value. The actual number of results returned by the method will be equal to or less than this after type filtratiion.
-   * @param {number} [returnLimit=50] - Limit the final number of results returned and cached by the function. By specifying the actual number of results that are required to be returned, it helps cut down on storage usage in caching.
-   * 
+   * @param {number} [resultLimit=50] - Limit the number of suggestions to return.
    * @throws {TypeError} Failure to fetch from APIs. Should be handled properly by caller.
    * @private
    */
-  async _resolveIdentifiersFromConcept(conceptValue, conceptType, resultLimit=50, returnLimit=50, ignoreCache=false) {
+  async _resolveIdentifiersFromConcept(conceptValue, conceptType, resultLimit=50, ignoreCache=false) {
     this._nameResController.abort();
     this._nameResController = new window.AbortController();
-    
     if (!ignoreCache) {
       // Find any cahced results that have the same type as `conceptType` and have a label that starts with `conceptValue`.
       const results = Object.entries(this._autocompleteResolvedIdentifiers).filter(([curie, data]) => {
-        return data._searchMetadata.some(([cachedConceptValue, cachedConceptType]) => cachedConceptValue === conceptValue && cachedConceptType === conceptType);
-        return data._searchConceptType === conceptType && data._searchConceptValue === conceptValue;
-        return (
-          // data._searchConceptType && data._searchConceptType.startsWith(conceptType) &&
-          // data._searchConceptValue && data._searchConceptValue.startsWith(conceptValue) &&
-          data.type.some((type) => this._categoryToType(type) === conceptType) && (
-            data.preferredLabel.startsWith(conceptValue) ||
-            data.otherLabels.some((label) => label.startsWith(conceptValue))
-          )
+        return data._searchMetadata.some(
+          ([cachedConceptValue, cachedConceptType]) => cachedConceptValue === conceptValue && cachedConceptType === conceptType
         );
       });
       if (results.length > 0) return Object.fromEntries(results);
     }
-    // Short strings are not well-supported by the name resolution API, so return no results.
-    if (conceptValue.length < 3) return {};
-    const args = {
-      limit: resultLimit,
-      // offset: resultOffset,
-      string: conceptValue
-    };
-    const res = await fetch(this.nameResolutionURL + '/lookup?' + qs.stringify(args), {
+    const res = await fetch(this.tranqlURL + "/tranql/autocomplete_term", {
       method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        "query": conceptValue,
+        "allowed_concept_types": [this._typeToCategory(conceptType)],
+        "prefix_search": true,
+        "query_limit": resultLimit
+      }),
       signal: this._nameResController.signal
     });
-    /*
-    interface NameResolutions {
-      [curie: string]: string[]
-    }
-    Where the strings in the array are names, i.e. {'MONDO:XXX': ["Asthma", "Asthmas", "Bronchial asthma", ...], ... }
-    */
-    const nameResolutions = await res.json();
-    // Now that we have name resolutions, we need to go through and only take the ones that are the same type as conceptType.
-    // For example, the conceptValue "a" could yield both "Asthma" (disease) and "Atrazine" (chemical_substance), but we only want diseases.
-    const filtered = {};
-    // The qs library does not seem to support the same type of qs list serialization as is expected by node norm, but URLSearchParams does.
-    const nodeNormArgs = new URLSearchParams();
-    Object.keys(nameResolutions).forEach((curie) => nodeNormArgs.append("curie", curie));
-    // Not entirely sure what this argument does, but it sounds like it merges results which we might not want. Probably inconsequential either way.
-    nodeNormArgs.append("conflate", false);
-    const nodeNormResults = await (await fetch(
-      this.nodeNormalizationURL + '/get_normalized_nodes?' + nodeNormArgs.toString()
-    )).json();
-    for (let i=0; i<Object.keys(nameResolutions).length; i++) {
-      const curie = Object.keys(nameResolutions)[i];
-      // nodeNormResults will return an object with only one key (`curie`) since we only query with one curie.
-      const result = nodeNormResults[curie];
-      if (result !== null) {
-        // The node normalization API doesn't support all curies that can be returned by the name resolution API.
-        // Unsupported curies will return a null object.
-        const isSameType = result["type"].some(type => this._categoryToType(type) === conceptType);
-        const includedCuries = Object.keys(filtered);
-        const includedEquivalentIdentifiers = result["equivalent_identifiers"].filter(({ identifier }) => includedCuries.includes(identifier));
-        if (includedEquivalentIdentifiers.length > 0) {
-          includedEquivalentIdentifiers.forEach((equivIdent) => {
-          });
-        }
-        else if (isSameType) filtered[curie] = {
-          // Node normalization returns its "preferred" label for the curie
-          preferredLabel: result["id"]["label"],
-          // Node normalization returns its "preferred" curie for the term
-          preferredCurie: result["id"]["identifier"],
-          score: 1, 
-          // Name resolutions also returns a whole bunch of synonyms for the same curie
-          /* Uses up too much space when caching */
-          // otherLabels: nameResolutions[curie],
-          // equivalentIdentifiers: result["equivalent_identifiers"],
-          type: result["type"],
-          _searchMetadata: [[conceptValue, conceptType]],
-        };
+    const data = await res.json();
+    const searchResults = data.map((hit) => {
+      const { node, score } = hit;
+      return {
+        preferredLabel: node.name,
+        preferredCurie: node.id,
+        score,
+        // Array of TRAPI 1.0 categories. `category` would be a more appropriate name for this property.
+        type: node.category,
+        _searchMetadata: [[conceptValue, conceptType]]
       }
-    }
-    this._updateResolvedIdentifiers(filtered, returnLimit);
-    return Object.fromEntries(Object.entries(filtered).slice(0, returnLimit));
+    });
+    this._updateResolvedIdentifiers(searchResults, resultLimit);
+    return searchResults.slice(0, resultLimit);
   }
   /**
    * Very similar to `_resolveIdentifiersFromConcept`, except that is designed for use with a curie instead of a name & biolink type.
